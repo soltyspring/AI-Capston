@@ -75,9 +75,17 @@ function FlowMap({ servers, tick, paused }) {
   return <section className="panel flow-panel">
     <div className="panel-head flow-title"><div><span className="eyebrow">PRIMARY VIEW</span><h2>Live request flow</h2><p>트래픽 묶음이 클수록 움직이는 점이 더 크게 표시됩니다.</p></div><div className="flow-head-stats"><b>{traffic.toLocaleString()}</b><small>REQUESTS / SEC</small><span className="live-pill"><i/> LIVE</span></div></div>
     <div className={`flow-map ${paused ? 'is-paused' : ''}`}>
-      <div className="traffic-field" aria-hidden="true">
-        {particles.map(p => <i key={p.id} className={`traffic-dot route-${p.target}`} style={{'--delay':`${p.delay}s`,'--size':`${5 + p.batch / 13}px`,'--left':`${p.left}%`,'--dot-color':COLORS[p.target]}}><span>{p.batch}</span></i>)}
-      </div>
+      <svg className="traffic-routes" viewBox="0 0 1000 450" preserveAspectRatio="none" aria-hidden="true">
+        <defs>
+          <filter id="dot-glow" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          <path id="route-a" d="M500 82 L500 286 L165 286 L165 333"/>
+          <path id="route-b" d="M500 82 L500 330"/>
+          <path id="route-c" d="M500 82 L500 286 L835 286 L835 333"/>
+        </defs>
+        {particles.map(p => <circle key={p.id} r={3 + p.batch / 22} fill={COLORS[p.target]} opacity=".78" filter="url(#dot-glow)">
+          {!paused && <animateMotion dur={`${3.4 + (p.id % 5) * .22}s`} begin={`${-p.delay}s`} repeatCount="indefinite"><mpath href={`#route-${['a','b','c'][p.target]}`}/></animateMotion>}
+        </circle>)}
+      </svg>
       <div className="flow-source flow-box"><span><Send size={25}/></span><div><strong>User requests</strong><small>HTTP / JSON · {traffic} req/s</small></div></div>
       <div className="trunk"><span/></div>
       <div className="balancer flow-box"><span><GitBranch size={27}/></span><div><strong>Load Balancer</strong><small>Round Robin Routing</small></div><b>{servers.reduce((a,s)=>a+s.queue,0)} queued</b></div>
