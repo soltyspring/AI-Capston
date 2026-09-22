@@ -67,19 +67,31 @@ function ServerCard({ server, selected, onClick, color }) {
 
 function FlowMap({ servers, tick, paused }) {
   const target = tick % 3
+  const traffic = servers.reduce((sum, server) => sum + server.requests, 0)
+  const particles = Array.from({ length: 54 }, (_, index) => {
+    const batch = 10 + ((index * 37 + tick * 11) % 91)
+    return { id: index, batch, target: index % 3, delay: (index * .11) % 4.2, left: 10 + ((index * 17) % 80) }
+  })
   return <section className="panel flow-panel">
-    <div className="panel-head"><div><h2>Live request flow</h2><p>Round-robin · real-time routing</p></div><span className="live-pill"><i/> LIVE</span></div>
-    <div className="flow-map">
-      <div className="flow-source"><span><Send size={17}/></span><div><strong>User requests</strong><small>HTTP / JSON</small></div></div>
-      <div className="flow-line vertical"><i className={!paused ? 'packet down' : ''}/></div>
-      <div className="balancer"><span><GitBranch size={20}/></span><div><strong>Load Balancer</strong><small>Round Robin</small></div><b>{servers.reduce((a,s)=>a+s.queue,0)} queued</b></div>
+    <div className="panel-head flow-title"><div><span className="eyebrow">PRIMARY VIEW</span><h2>Live request flow</h2><p>트래픽 묶음이 클수록 움직이는 점이 더 크게 표시됩니다.</p></div><div className="flow-head-stats"><b>{traffic.toLocaleString()}</b><small>REQUESTS / SEC</small><span className="live-pill"><i/> LIVE</span></div></div>
+    <div className={`flow-map ${paused ? 'is-paused' : ''}`}>
+      <div className="traffic-field" aria-hidden="true">
+        {particles.map(p => <i key={p.id} className={`traffic-dot route-${p.target}`} style={{'--delay':`${p.delay}s`,'--size':`${5 + p.batch / 13}px`,'--left':`${p.left}%`,'--dot-color':COLORS[p.target]}}><span>{p.batch}</span></i>)}
+      </div>
+      <div className="flow-source flow-box"><span><Send size={25}/></span><div><strong>User requests</strong><small>HTTP / JSON · {traffic} req/s</small></div></div>
+      <div className="trunk"><span/></div>
+      <div className="balancer flow-box"><span><GitBranch size={27}/></span><div><strong>Load Balancer</strong><small>Round Robin Routing</small></div><b>{servers.reduce((a,s)=>a+s.queue,0)} queued</b></div>
       <div className="branches">
         {servers.map((s, i) => <div className="branch" key={s.id}>
-          <div className="branch-line"><i className={!paused && i === target ? 'packet active' : 'packet'}/></div>
-          <div className={`node ${i === target && !paused ? 'receiving' : ''}`}><Server size={18}/><span><strong>Server {s.id}</strong><small>{s.gpu}% GPU</small></span><em>{s.queue}</em></div>
+          <div className="branch-line"/>
+          <div className={`node ${i === target && !paused ? 'receiving' : ''}`}>
+            <span className="node-icon"><Server size={23}/></span><span><strong>GPU Server {s.id}</strong><small>{s.requests} req/s · {s.tokens} tok/s</small></span><em>{s.queue}<small>QUEUE</small></em>
+            <div className="node-load"><i style={{width:`${s.gpu}%`}}/><span>{s.gpu}% GPU</span></div>
+          </div>
         </div>)}
       </div>
-      <div className="flow-note"><Activity size={14}/> Requests are being distributed evenly across 3 healthy nodes</div>
+      <div className="traffic-legend"><span><i className="legend-dot small"/> 10 requests</span><span><i className="legend-dot medium"/> 50 requests</span><span><i className="legend-dot large"/> 100 requests</span></div>
+      <div className="flow-note"><Activity size={16}/> 실시간 요청이 3개의 정상 서버에 균등하게 분산되고 있습니다.</div>
     </div>
   </section>
 }
@@ -155,13 +167,14 @@ function App() {
       </header>
       <div className="content">
         <div className="status-row"><div><span className="status-dot"/>SYSTEM ONLINE <small>Last synced 2s ago</small></div><div><button onClick={reset}><RotateCcw size={15}/> Reset</button><button className="control" onClick={()=>setPaused(p=>!p)}>{paused?<Play size={15}/>:<Pause size={15}/>} {paused?'Resume':'Pause'} stream</button></div></div>
-        <section className="metrics-grid">
+        <FlowMap servers={servers} tick={tick} paused={paused}/>
+        <section className="metrics-grid below-flow">
           <MiniMetric icon={Activity} label="Total requests" value={totals.rps} sub="+12.4% from last minute" history={history.rps}/>
           <MiniMetric icon={Clock3} label="Avg. latency" value={`${totals.latency} ms`} sub="−8.2% from last minute" color="#68a8ff" history={history.latency}/>
           <MiniMetric icon={Zap} label="Token throughput" value={totals.tokens} sub="tokens per second" color="#a78bfa" history={history.tokens}/>
           <MiniMetric icon={Cpu} label="Avg. GPU usage" value={`${totals.gpu}%`} sub="Across 3 active servers" color="#f5b45d" history={history.gpu}/>
         </section>
-        <section className="overview-grid"><FlowMap servers={servers} tick={tick} paused={paused}/><TrafficChart series={series}/></section>
+        <TrafficChart series={series}/>
         <div className="section-title"><div><h2>GPU server status</h2><p>Select a server to inspect its current workload</p></div><button>View all metrics <span>→</span></button></div>
         <section className="server-grid">{servers.map((s,i)=><ServerCard key={s.id} server={s} color={COLORS[i]} selected={selected===s.id} onClick={()=>setSelected(s.id)}/>)}</section>
       </div>
