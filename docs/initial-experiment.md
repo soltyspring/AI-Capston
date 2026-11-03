@@ -1,5 +1,8 @@
 # 초기 실험 결과와 해석
 
+이 문서는 2026-10-13 구간 평균 출력 예측 기준선의 기록입니다. 현재 기본 예측기는
+랜덤 포레스트로 변경되었습니다. 최신 예측 모델과 오차는 [output-prediction.md](output-prediction.md)를 참고하세요.
+
 2026-10-13, Mooncake conversation trace의 시간순 마지막 15%(1805개)에서 실행했습니다.
 학습은 앞 70%의 입력 길이 구간별 출력 평균, 양쪽 정책은 빈 캐시에서 시작했습니다.
 실행 명령: `python -m backend.experiment data/conversation_trace.jsonl`.
