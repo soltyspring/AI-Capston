@@ -2,6 +2,7 @@
 import argparse
 import json
 from backend.core import Predictor, Simulator, load_trace
+from backend.prediction import train_and_split
 
 
 def main():
@@ -9,11 +10,7 @@ def main():
     parser.add_argument("trace")
     args = parser.parse_args()
     rows = load_trace(args.trace)
-    if len(rows) < 20:
-        raise ValueError('at least 20 requests required for chronological training split')
-    predictor = Predictor()
-    predictor.fit(rows[:int(len(rows) * .7)])
-    test = rows[int(len(rows) * .85):]
+    predictor, test, model_report = train_and_split(rows)
     if not test:
         raise ValueError("trace too small for test split")
     results = []
@@ -24,7 +21,7 @@ def main():
             sim.advance(60)
         snapshot = sim.snapshot()
         results.append({k: snapshot[k] for k in ("policy", "processed", "completed", "rejected", "avg_latency")})
-    print(json.dumps(results, indent=2))
+    print(json.dumps({'prediction_model': model_report, 'routing_results': results}, indent=2))
 
 
 if __name__ == "__main__":
