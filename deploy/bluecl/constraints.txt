@@ -1,0 +1,4 @@
+# Compatible wheels for the BlueCL host's older x86 CPU (Python 3.11).
+numpy==2.2.6
+scipy==1.15.3
+scikit-learn==1.6.1

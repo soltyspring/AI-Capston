@@ -1,0 +1,24 @@
+[Unit]
+Description=AICAP Mooncake simulation API
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/solty/.local/share/aicap/current
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=OMP_NUM_THREADS=1
+Environment=OPENBLAS_NUM_THREADS=1
+Environment=MKL_NUM_THREADS=1
+Environment=AICAP_TRAIN=1
+ExecStart=/home/solty/.local/share/aicap/venv/bin/python -m uvicorn backend.api:app --host 127.0.0.1 --port 18822 --workers 1 --no-access-log --no-server-header --limit-concurrency 32 --timeout-keep-alive 5
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=90
+NoNewPrivileges=true
+UMask=0077
+MemoryMax=768M
+TasksMax=64
+
+[Install]
+WantedBy=default.target
