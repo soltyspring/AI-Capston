@@ -1,0 +1,13 @@
+[Unit]
+Description=AICAP private tunnel to EC2 load balancer
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=%h/.config/aicap/router-tunnel.env
+ExecStart=/usr/bin/ssh -NT -i %h/.ssh/aicap-router-tunnel -o BatchMode=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -L 127.0.0.1:18823:127.0.0.1:8008 ${AICAP_ROUTER_TARGET}
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
