@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { DashboardShell, LiveFlowMap, LiveMetrics, LiveServerCard, DistributionChart } from './DashboardView.jsx'
 import ConsiderationPanel from './ConsiderationPanel.jsx'
 import ResearchGuide from './ResearchGuide.jsx'
+import ActualDashboard from './ActualDashboard.jsx'
 
 const number = value => Number(value).toLocaleString()
 // Vite's base is '/' locally and '/aicap/' for the path-based public deployment.
@@ -18,6 +19,9 @@ async function sendControl(action, extra = {}) {
 }
 
 export default function SimulatorApp() {
+  const [page,setPage]=useState(1)
+  const pageRef=useRef(page)
+  pageRef.current=page
   const [state, setState] = useState(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -37,6 +41,7 @@ export default function SimulatorApp() {
   useEffect(() => {
     let alive = true, timer, initialized = false
     async function poll() {
+      if (pageRef.current !== 1) {timer = setTimeout(poll, 1000); return}
       if (commandInFlight.current) {timer = setTimeout(poll, 500); return}
       const version = ++requestVersion.current
       try {
@@ -84,7 +89,7 @@ export default function SimulatorApp() {
   }
   const latest = state?.decisions.at(-1)
   return <DashboardShell state={state}>
-    <div className="content">
+    <div className="content" hidden={page!==1}>
       <div className="playback-toolbar">
         <span className="traffic-mode-label">{state?.traffic?.label ?? '일반 보기'}</span>
         <details className="traffic-experiment"><summary>실험 모드</summary><div>
@@ -128,5 +133,7 @@ export default function SimulatorApp() {
         <section className="panel decision-panel" id="request-logs"><h2>최근 분배 기록</h2><div className="table-scroll"><table><thead><tr><th>요청</th><th>도착 시각</th><th>입력 토큰</th><th>예상 출력</th><th>분배 서버</th></tr></thead><tbody>{[...state.decisions].reverse().map(d => <tr key={d.id}><td>#{d.id + 1}</td><td>{d.time.toFixed(2)}초</td><td>{number(d.input_tokens)}</td><td>{d.predicted_output_tokens}</td><td>{d.selected ?? '거절'}</td></tr>)}</tbody></table></div></section>
       </>}
     </div>
+    {page===2 && <div className="content"><ActualDashboard/></div>}
+    <nav className="page-switch" aria-label="화면 선택"><button aria-pressed={page===1} onClick={()=>setPage(1)}>1</button><button aria-pressed={page===2} onClick={()=>setPage(2)}>2</button></nav>
   </DashboardShell>
 }
