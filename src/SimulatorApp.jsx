@@ -18,6 +18,21 @@ async function sendControl(action, extra = {}) {
   return response.json()
 }
 
+const VIRTUAL_BASE = [{gpu:85,mem:18200,wait:'2건'},{gpu:35,mem:15400,wait:'0건'},{gpu:62,mem:17100,wait:'1건'}]
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v))
+function VirtualStatusTable() {
+  const [values, setValues] = useState(VIRTUAL_BASE)
+  useEffect(() => {
+    const timer = setInterval(() => setValues(VIRTUAL_BASE.map(b => ({...b, gpu: clamp(Math.round(b.gpu + (Math.random() - .5) * 14), 5, 99), mem: Math.round(b.mem + (Math.random() - .5) * 600)}))), 1500)
+    return () => clearInterval(timer)
+  }, [])
+  return <section className="panel decision-panel" aria-label="발표용 가상 서버 상태 예시"><div className="table-scroll"><table><thead><tr><th>항목</th><th>서버 A · ai</th><th>서버 B · ai1</th><th>서버 C · ai2</th></tr></thead><tbody>
+    <tr><th>GPU 사용률</th>{values.map((v, k) => <td key={k}><b>{v.gpu}%</b><div className={'gauge' + (v.gpu >= 80 ? ' hot' : '')}><i style={{width: v.gpu + '%'}}/></div></td>)}</tr>
+    <tr><th>GPU 메모리 사용</th>{values.map((v, k) => <td key={k}>{v.mem.toLocaleString()} MiB</td>)}</tr>
+    <tr><th>대기 요청 수</th>{values.map((v, k) => <td key={k}>{v.wait}</td>)}</tr>
+  </tbody></table></div></section>
+}
+
 export default function SimulatorApp() {
   const [page,setPage]=useState(1)
   const pageRef=useRef(page)
@@ -92,6 +107,21 @@ export default function SimulatorApp() {
     <div className="content" hidden={page!==1}>
       {error && <p role="alert" className="simulation-error">{error}</p>}
       {state && <LiveFlowMap key={`${state.run_id}-${state.policy}-${state.dataset?.name}`} state={state} control={<button className="playback-toggle story-toggle" disabled={busy || !state} onClick={() => command(state.running ? 'pause' : 'start')}>{state.running ? '중지' : '시작'}</button>}/>}
+      {state && <LiveMetrics state={state} samples={samples}/>}
+      {state && <>
+          <div className="section-title" id="servers"><div><h2>GPU server status</h2><p>서버를 선택하면 상세 상태를 확인합니다.</p></div></div>
+        <VirtualStatusTable/>
+          <section className="server-grid">{state.servers.map((s,i) => <LiveServerCard key={s.id} server={s} index={i} selected={selected === s.id} onClick={() => setSelected(s.id)}/>)}</section>
+          <section className="selected-server-detail">{state.servers.filter(s => s.id === selected).map(s => <article className="panel" key={s.id}>
+            <h2>서버 {s.id} · {s.activity ? s.activity.phase === 'prefill' ? '입력 처리 중' : '답변 생성 중' : '유휴'}</h2>
+            {s.activity && <><p>요청 #{s.activity.id + 1} · 경과 {s.activity.elapsed.toFixed(1)}초 · 생성 {number(s.activity.generated_tokens)}토큰</p><progress aria-label={`서버 ${s.id} 예상 진행률`} value={s.activity.progress} max="100"/><small>예측 출력 길이 기준 {s.activity.progress}% · 완료 전 최대 99%</small></>}
+            <dl><dt>대기 요청</dt><dd>{s.queue}개</dd><dt>대기 입력</dt><dd>{number(s.queued_input_tokens)} 토큰</dd><dt>처리 중 입력</dt><dd>{number(s.context_tokens)} 토큰</dd><dt>처리 중</dt><dd>{s.gpu ? '예' : '아니요'}</dd></dl>
+          </article>)}</section>
+        <section className="panel decision-panel" id="completions"><h2>처리 완료 기록</h2><p>예상·실제 출력과 처리 지연</p>
+          <div className="completion-timeline">{state.completions?.length ? [...state.completions].reverse().slice(0,8).map(e => <div className="completion-event" key={e.id}><span className="completion-check">✓</span><div><strong>#{e.id + 1} · 서버 {e.server} 처리 완료</strong><small>{e.time.toFixed(1)}초 시점 · 예상 {number(e.predicted_output_tokens)} / 실제 {number(e.output_tokens)}토큰 · 오차 {number(e.error_tokens)}토큰 · 총 지연 {e.latency.toFixed(2)}초</small></div></div>) : <p>아직 완료된 요청이 없습니다. 시뮬레이션을 시작하세요.</p>}</div>
+        </section>
+      </>}
+
       <details className="panel dataset-panel"><summary>{state?.dataset?.name ?? '데이터 연결 확인 중'} · 데이터 출처와 재생 설정</summary>
         {state?.dataset && <><p>원본 {number(state.dataset.requests)}개 · {Math.floor(state.dataset.duration_seconds / 60)}분 {Math.round(state.dataset.duration_seconds % 60)}초 · {state.dataset.mode}</p>
           <p>실제 기록: 도착 시각 · 입력/출력 토큰 수. 가상 계산: 서버 3대 · 큐 · 처리 시간.</p>
@@ -102,19 +132,8 @@ export default function SimulatorApp() {
       </details>
       <ResearchGuide state={state}/>
       {state && <>
-        <LiveMetrics state={state} samples={samples}/>
         <ConsiderationPanel state={state}/>
         <DistributionChart samples={samples}/>
-        <div className="section-title" id="servers"><div><h2>GPU server status</h2><p>서버를 선택하면 상세 상태를 확인합니다.</p></div></div>
-        <section className="server-grid">{state.servers.map((s,i) => <LiveServerCard key={s.id} server={s} index={i} selected={selected === s.id} onClick={() => setSelected(s.id)}/>)}</section>
-        <section className="selected-server-detail">{state.servers.filter(s => s.id === selected).map(s => <article className="panel" key={s.id}>
-          <h2>서버 {s.id} · {s.activity ? s.activity.phase === 'prefill' ? '입력 처리 중' : '답변 생성 중' : '유휴'}</h2>
-          {s.activity && <><p>요청 #{s.activity.id + 1} · 경과 {s.activity.elapsed.toFixed(1)}초 · 생성 {number(s.activity.generated_tokens)}토큰</p><progress aria-label={`서버 ${s.id} 예상 진행률`} value={s.activity.progress} max="100"/><small>예측 출력 길이 기준 {s.activity.progress}% · 완료 전 최대 99%</small></>}
-          <dl><dt>대기 요청</dt><dd>{s.queue}개</dd><dt>대기 입력</dt><dd>{number(s.queued_input_tokens)} 토큰</dd><dt>처리 중 입력</dt><dd>{number(s.context_tokens)} 토큰</dd><dt>처리 중</dt><dd>{s.gpu ? '예' : '아니요'}</dd></dl>
-        </article>)}</section>
-        <section className="panel decision-panel" id="completions"><h2>처리 완료 기록</h2><p>예상·실제 출력과 처리 지연</p>
-          <div className="completion-timeline">{state.completions?.length ? [...state.completions].reverse().slice(0,8).map(e => <div className="completion-event" key={e.id}><span className="completion-check">✓</span><div><strong>#{e.id + 1} · 서버 {e.server} 처리 완료</strong><small>{e.time.toFixed(1)}초 시점 · 예상 {number(e.predicted_output_tokens)} / 실제 {number(e.output_tokens)}토큰 · 오차 {number(e.error_tokens)}토큰 · 총 지연 {e.latency.toFixed(2)}초</small></div></div>) : <p>아직 완료된 요청이 없습니다. 시뮬레이션을 시작하세요.</p>}</div>
-        </section>
         <section className="panel decision-panel" id="routing"><h2>마지막 요청의 선택 근거</h2>
           {latest ? <><p>입력 {number(latest.input_tokens)} 토큰 · 예상 출력 {latest.predicted_output_tokens} 토큰 ({state.predictor}) · {latest.selected ? `서버 ${latest.selected} 선택` : '처리 가능한 서버 없음 → 거절'}</p>
             <div className="table-scroll"><table><thead><tr>{['서버', '가능 여부', '대기', '입력 처리', '답변 생성', '예상 합계'].map(x => <th key={x}>{x}</th>)}</tr></thead><tbody>{latest.candidates.map(c => <tr key={c.server} className={c.server === latest.selected ? 'chosen' : ''}><td>{c.server}</td><td>{c.eligible ? '가능' : '용량 초과'}</td>{['wait', 'prefill', 'decode', 'total'].map(k => <td key={k}>{c[k].toFixed(2)}초</td>)}</tr>)}</tbody></table></div>

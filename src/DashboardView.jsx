@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Activity, Clock3, Database, GitBranch, LayoutDashboard, Menu, Network, Send, Server, Terminal, Zap } from 'lucide-react'
+import { Activity, Clock3, Database, GitBranch, LayoutDashboard, Menu, Send, Server, Terminal, Zap } from 'lucide-react'
 import RequestParticle from './RequestParticle.jsx'
 import { FlowMessages, NarrationControls } from './FlowNarration.jsx'
 import RequestStory from './RequestStory.jsx'
@@ -16,15 +16,14 @@ export function DashboardShell({ state, children }) {
     return () => window.removeEventListener('hashchange', update)
   }, [])
   return <div className={`app-shell integrated-dashboard ${menu ? 'menu-open' : ''}`}>
-    <aside><div className="brand"><span><Network size={22}/></span><div>AICAP<small>AI INFRA OPS</small></div></div>
+    <aside>
       <nav aria-label="대시보드 메뉴"><p>WORKSPACE</p>
-        {[[LayoutDashboard,'대시보드','#overview'],[Activity,'실시간 요청 흐름','#live-flow'],[Database,'연구·데이터 설명','#research-guide'],[Database,'고려 요소 현황','#factors'],[Server,'GPU 서버 상태','#servers'],[GitBranch,'서버 선택 근거','#routing'],[Terminal,'최근 분배 기록','#request-logs'],[Clock3,'처리 완료 기록','#completions']].map(([Icon,label,href]) => <a href={href} key={href} className={active === href ? 'active' : ''} aria-current={active === href ? 'location' : undefined} onClick={() => setMenu(false)}><Icon size={18}/>{label}</a>)}
+        {[[LayoutDashboard,'대시보드','#overview'],[Activity,'실시간 요청 흐름','#live-flow'],[Server,'GPU 서버 상태','#servers'],[Clock3,'처리 완료 기록','#completions'],[Database,'연구·데이터 설명','#research-guide'],[Database,'고려 요소 현황','#factors'],[GitBranch,'서버 선택 근거','#routing'],[Terminal,'최근 분배 기록','#request-logs']].map(([Icon,label,href]) => <a href={href} key={href} className={active === href ? 'active' : ''} aria-current={active === href ? 'location' : undefined} onClick={() => setMenu(false)}><Icon size={18}/>{label}</a>)}
       </nav>
-      <div className="side-bottom"><div className="system-health"><span><i/>{state ? state.running ? 'Replay running' : 'Replay paused' : 'Connecting to API'}</span><small>Mooncake · 3 simulated replicas</small></div></div>
     </aside>
     <main className="simulation-app" id="overview"><header>
       <button className="mobile-menu" aria-label="메뉴 열기" aria-expanded={menu} onClick={() => setMenu(x => !x)}><Menu/></button>
-      <div className="title"><h1>로드밸런싱 시뮬레이터</h1><p>Mooncake 요청 기록으로 확인하는 서버 분배와 처리 현황</p></div>
+      <div className="title"><h1>로드밸런서 대시보드</h1></div>
     </header>{children}</main>
   </div>
 }
@@ -105,17 +104,17 @@ export const LiveFlowMap = RequestStory
 
 function Sparkline({ values, color }) {
   if (values.length < 2) return null
-  const max = Math.max(...values,1), min = Math.min(...values)
-  const points = values.map((value,i) => `${i / (values.length - 1) * 100},${50 - (value-min) / Math.max(1,max-min) * 43}`).join(' ')
+  const max = Math.max(...values), min = Math.min(...values), range = max - min
+  const top = 6, bottom = 56 * 0.87
+  const points = values.map((value,i) => `${i / (values.length - 1) * 100},${range > 0 ? bottom - (value-min) / range * (bottom - top) : (top + bottom) / 2}`).join(' ')
   return <svg className="sparkline" viewBox="0 0 100 56" preserveAspectRatio="none" aria-label="실제 상태 조회 추이"><polyline points={points} stroke={color} strokeWidth="1.5" fill="none" vectorEffect="non-scaling-stroke"/></svg>
 }
 
 export function LiveMetrics({state, samples}) {
-  const metrics = [[Activity,'Total requests',n(state.processed),`전체 ${n(state.total)}개 중 도착`,'servers',COLORS[0]],
+  const metrics = [[Activity,'Total requests',n(state.processed),'최근 24시간 총 요청','servers',COLORS[0]],
     [Clock3,'Avg. latency',`${state.avg_latency.toFixed(2)} s`,'완료 요청의 평균 지연','latency',COLORS[1]],
-    [Zap,'Completed requests',n(state.completed),'시뮬레이션 처리 완료','completed',COLORS[2]],
-    [Database,'Rejected requests',n(state.rejected),'입력 + 출력 예약 한도 초과','rejected','#d69740']]
-  return <section className="metrics-grid below-flow">{metrics.map(([Icon,label,value,sub,key,color]) => <article className="metric-card" key={key}><div className="metric-top"><span className="icon-box"><Icon size={17}/></span>{label}</div><div className="metric-value">{value}</div><div className="metric-sub">{sub}</div><div className="metric-spark"><Sparkline values={samples.map(p => key === 'servers' ? p.processed : p[key])} color={color}/></div></article>)}</section>
+    [Zap,'Completed requests',n(state.completed),'처리 완료','completed',COLORS[2]]]
+  return <section className="metrics-grid below-flow actual-metrics">{metrics.map(([Icon,label,value,sub,key,color]) => <article className="metric-card" key={key}><div className="metric-top"><span className="icon-box"><Icon size={17}/></span>{label}</div><div className="metric-value">{value}</div><div className="metric-sub">{sub}</div><div className="metric-spark"><Sparkline values={samples.map(p => key === 'servers' ? p.processed : p[key])} color={color}/></div></article>)}</section>
 }
 
 export function LiveServerCard({server:s,index,selected,onClick}) {
