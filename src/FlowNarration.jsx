@@ -24,7 +24,7 @@ export function FlowMessages({ state, step }) {
   const chosen = latest?.candidates.find(candidate => candidate.server === latest.selected)
   const completion = state.completions?.at(-1)
   const [typed, setTyped] = useState('')
-  const example = '네이버 소개 자료를 요약해 줘.'
+  const example = '삼성전자 주가는 저평가 됐을까?'
   useEffect(() => {
     if (step !== 0 || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {setTyped(example); return}
     let length = 0

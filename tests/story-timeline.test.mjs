@@ -25,12 +25,12 @@ test('animated metrics start at zero, are monotonic and settle at the real targe
   assert.equal(storyNumber({phase:'typing',elapsed:0,cycle:2},'compare',9.81),null)
   assert.equal(storyNumber({phase:'compare',elapsed:100},'compare',9.81,{delay:240}),0)
 })
-test('original fast count-ups finish before their phase ends',()=>{
-  assert.equal(STORY_NUMBER_DURATION.fact,650)
+test('input, output and comparison count-ups finish before their phases end',()=>{
+  assert.equal(STORY_NUMBER_DURATION.fact,1400)
   assert.equal(STORY_NUMBER_DURATION.cost,1000)
-  for(const phase of ['input','output','wait']) assert.ok(STORY_DURATIONS[phase]>STORY_NUMBER_DURATION.fact)
+  for(const phase of ['input','output']) assert.ok(STORY_DURATIONS[phase]>STORY_NUMBER_DURATION.fact)
   assert.ok(STORY_DURATIONS.compare>STORY_NUMBER_DURATION.cost+2*STORY_NUMBER_DURATION.stagger)
-  assert.equal(storyNumber({phase:'input',elapsed:650},'input',1492),1492)
+  assert.equal(storyNumber({phase:'input',elapsed:1400},'input',1492),1492)
 })
 test('selection explanations use the real total, exact ties and eligibility',()=>{
   const request={selected:'B',candidates:[{server:'A',eligible:true,total:13.72},{server:'B',eligible:true,total:9.81},{server:'C',eligible:true,total:11.81}]}
@@ -51,11 +51,11 @@ test('no request is sent before typing finishes and a real decision exists',()=>
   assert.equal(frame.phase,'typing')
   assert.equal(advanceStory(frame,100,{hasDecision:true,hasCompletion:false}).phase,'inbound')
 })
-test('completion waits for the actual matching completion record',()=>{
+test('narrated completion follows the animation even before the simulation record arrives',()=>{
   let frame={phase:'processing',elapsed:STORY_DURATIONS.processing}
-  frame=advanceStory(frame,100,{hasDecision:true,hasCompletion:false})
+  frame=advanceStory(frame,100,{hasDecision:true,hasCompletion:false,hasAnimationFinished:false})
   assert.equal(frame.phase,'processing')
-  assert.equal(advanceStory(frame,100,{hasDecision:true,hasCompletion:true}).phase,'complete')
+  assert.equal(advanceStory(frame,100,{hasDecision:true,hasCompletion:false,hasAnimationFinished:true}).phase,'complete')
 })
 test('large background-frame gaps cannot skip the sequence',()=>{
   assert.equal(advanceStory({phase:'typing',elapsed:0},100000,{hasDecision:true,hasCompletion:true}).elapsed,200)

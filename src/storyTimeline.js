@@ -1,21 +1,25 @@
-export const STORY_QUESTION = '네이버 소개 자료를 요약해 줘.'
+export const STORY_QUESTION = '삼성전자 주가는 저평가 됐을까?'
 export const STORY_QUESTIONS = [
-  {text:STORY_QUESTION, label:'자료 요약'},
-  {text:'이번 분기 매출에서 달라진 점을 찾아 줘.', label:'보고서 분석'},
-  {text:'이 코드가 어떻게 동작하는지 설명해 줘.', label:'코드 설명'},
-  {text:'두 서비스의 장단점을 비교해 줘.', label:'정보 비교'},
-  {text:'이 문서를 자연스러운 영어로 번역해 줘.', label:'문서 번역'},
+  {text:STORY_QUESTION, label:'기업 평가'},
+  {text:'카카오와 네이버의 서비스 차이를 요약해 줘.', label:'정보 비교'},
+  {text:'삼성전자의 주요 사업을 요약해 줘.', label:'기업 분석'},
+  {text:'파이썬 반복문 예제를 요약해 줘.', label:'코드 작성'},
+  {text:'인공지능의 장점을 요약해 줘.', label:'영어 작성'},
 ]
 export const storyQuestion = frame => STORY_QUESTIONS[(frame.cycle || 0) % STORY_QUESTIONS.length]
 export const storyDuration = frame => frame.phase === 'typing' ? storyQuestion(frame).text.length * 95 + 550 : STORY_DURATIONS[frame.phase]
 export const STORY_PHASES = ['typing', 'inbound', 'input', 'output', 'wait', 'compare', 'dispatch', 'processing', 'complete', 'live']
-export const STORY_NUMBER_DURATION = {fact:650,cost:1000,stagger:120}
-export const STORY_DURATIONS = {typing:STORY_QUESTION.length * 95 + 550, inbound:1100, input:850, output:850, wait:850, compare:1500, dispatch:1500, processing:2000, complete:3500, live:2000}
+export const STORY_NUMBER_DURATION = {fact:1400,cost:1000,stagger:150}
+export const STORY_DURATIONS = {typing:STORY_QUESTION.length * 95 + 550, inbound:900, input:1600, output:1600, wait:500, compare:1400, dispatch:800, processing:1200, complete:1500, live:2000}
 
 // Choose an unused real decision, preferring a visibly different comparison.
 // Never change its selected server or manufacture new token counts.
-export function nextStoryRequest(decisions, used, previous) {
+export function nextStoryRequest(decisions, used, previous, preferredServer) {
   const available = [...decisions].reverse().filter(d => d.selected && !used.has(d.id))
+  if (preferredServer) {
+    const match = available.find(d => d.selected === preferredServer)
+    if (match) return match
+  }
   return available.find(d => d.selected !== previous?.selected && d.input_tokens !== previous?.input_tokens && d.predicted_output_tokens !== previous?.predicted_output_tokens)
     || available.find(d => d.input_tokens !== previous?.input_tokens && d.predicted_output_tokens !== previous?.predicted_output_tokens)
     || available[0] || null
@@ -26,7 +30,7 @@ export function advanceStory(frame, delta, {hasDecision, hasCompletion, hasAnima
   if (elapsed < storyDuration(frame)) return {...frame, elapsed}
   if (frame.phase === 'live') return {phase:'typing',elapsed:0,cycle:(frame.cycle || 0)+1}
   if (frame.phase === 'typing' && !hasDecision) return {...frame, elapsed}
-  if (frame.phase === 'processing' && (!hasCompletion || !hasAnimationFinished)) return {...frame, elapsed}
+  if (frame.phase === 'processing' && !hasAnimationFinished) return {...frame, elapsed}
   return {...frame,phase:STORY_PHASES[STORY_PHASES.indexOf(frame.phase) + 1], elapsed:0}
 }
 
@@ -54,7 +58,7 @@ export function serverSelectionReason(request) {
 
 export function storyExplanation(frame,request) {
   const index=STORY_PHASES.indexOf(frame.phase)
-  if(index<2) return null
+  if(index<2) return {key:'request',title:'사용자 요청',text:'사용자의 질문이 로드밸런서로 전달됩니다.'}
   if(index<5) return {key:'prepare',title:'요청 확인',text:'입력 길이와 예상 답변 길이, 서버의 남은 작업을 확인합니다.'}
   if(index===5) return {key:'compare',title:'서버 비교',text:'처리 가능한 서버의 예상 완료 시간을 비교합니다.'}
   if(index<8) return {key:'selected',title:`서버 ${request?.selected || '—'} 선택`,text:serverSelectionReason(request)}

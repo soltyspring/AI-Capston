@@ -51,7 +51,7 @@ export default function SimulatorApp() {
         if (!initialized && alive) {
           if (data.finished || data.policy !== 'cost' || data.traffic?.mode !== 'standard') await sendControl('reset', {traffic_mode:'standard'})
           if (!alive) return
-          data = await sendControl('start', {speed: 1})
+          data = await sendControl('pause', {speed: 1})
           initialized = true
         }
         if (alive && version === requestVersion.current) { setState(data); setError('') }
@@ -90,18 +90,8 @@ export default function SimulatorApp() {
   const latest = state?.decisions.at(-1)
   return <DashboardShell state={state}>
     <div className="content" hidden={page!==1}>
-      <div className="playback-toolbar">
-        <span className="traffic-mode-label">{state?.traffic?.label ?? '일반 보기'}</span>
-        <details className="traffic-experiment"><summary>실험 모드</summary><div>
-          <p>모드를 바꾸면 내 재생만 처음부터 시작합니다.</p>
-          <button disabled={busy || !state || state.traffic?.mode === 'standard'} onClick={() => changeTraffic('standard')}>일반 보기</button>
-          <button disabled={busy || !state || state.traffic?.mode === 'original'} onClick={() => changeTraffic('original')}>원본 트래픽 (과부하)</button>
-          <small>일반: 유입 간격 {state?.traffic?.calibration?.interval_scale ?? '—'}배 · 원본: 실제 도착 간격</small>
-        </div></details>
-        <button className="playback-toggle" disabled={busy || !state} onClick={() => command(state.running ? 'pause' : 'start')}>{!state ? '연결 중' : state.running ? '중지' : '시작'}</button>
-      </div>
       {error && <p role="alert" className="simulation-error">{error}</p>}
-      {state && <LiveFlowMap key={`${state.run_id}-${state.policy}-${state.dataset?.name}`} state={state}/>}
+      {state && <LiveFlowMap key={`${state.run_id}-${state.policy}-${state.dataset?.name}`} state={state} control={<button className="playback-toggle story-toggle" disabled={busy || !state} onClick={() => command(state.running ? 'pause' : 'start')}>{state.running ? '중지' : '시작'}</button>}/>}
       <details className="panel dataset-panel"><summary>{state?.dataset?.name ?? '데이터 연결 확인 중'} · 데이터 출처와 재생 설정</summary>
         {state?.dataset && <><p>원본 {number(state.dataset.requests)}개 · {Math.floor(state.dataset.duration_seconds / 60)}분 {Math.round(state.dataset.duration_seconds % 60)}초 · {state.dataset.mode}</p>
           <p>실제 기록: 도착 시각 · 입력/출력 토큰 수. 가상 계산: 서버 3대 · 큐 · 처리 시간.</p>
