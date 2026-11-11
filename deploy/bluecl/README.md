@@ -4,7 +4,17 @@ Target: `https://bluecl.cloud/aicap/`.
 
 Recovery 2026-11-03: the API stayed healthy, but the nginx global method map regenerated on Oct 29 omitted the two AICAP POST exceptions, causing HTTP 405 on start/step. Applied `repair-api-methods.py` to both the live map and installed `/usr/local/sbin/bluecl-security` generator. Backup: `/var/backups/aicap-method-repair-6il66mb6`. Nginx syntax checks and reload passed. Public `/api/control` and `/api/step` returned 200, and browser automatic playback and completion counters advanced. No backend restart, static redeployment, broad method allowance or Cloudflare change. Preserve these exceptions when replacing the generator in future maintenance.
 
-Latest release: frontend `20261023T160042Z-bc79a5fc`, backend `20261024-queue`. Restored the original 650ms fact / 1s cost count-ups and fast balancer phases. Removed the numeric speed-difference badge. Stage explanations unfold in a separate side message box without gating the balancer, with reduced-motion support and mobile stacking. Top-right completion status, round dots, exact-tie rotation, FIFO queues and visitor isolation remain intact. See `docs/request-story.md`. No API restart or security-rule changes. Previous notes below are historical.
+## Actual GPU router
+
+The live dashboard relays requests and status through the existing `/aicap/api/control` path. The API expects the router SSH forward at `127.0.0.1:18823`; the router listens on EC2 loopback port 8008.
+
+For a new installation, create `~/.config/aicap/router-tunnel.env` with `AICAP_ROUTER_TARGET=ubuntu@<router-host>`. Keep the SSH key locally at `~/.ssh/aicap-router-tunnel` and register the verified SSH host key before starting the tunnel. Install `aicap-router-tunnel.service` under `~/.config/systemd/user/`, then run `systemctl --user daemon-reload` and `systemctl --user enable --now aicap-router-tunnel.service`. Check the connection with `curl --fail http://127.0.0.1:18823/status` on the BlueCL host.
+
+The demo allows at most three live requests in flight and defaults to 120 live requests per hour across visitors (`AICAP_REAL_HOURLY_LIMIT`).
+
+## Historical releases
+
+October release: frontend `20261023T160042Z-bc79a5fc`, backend `20261024-queue`. Restored the original 650ms fact / 1s cost count-ups and fast balancer phases. Removed the numeric speed-difference badge. Stage explanations unfold in a separate side message box without gating the balancer, with reduced-motion support and mobile stacking. Top-right completion status, round dots, exact-tie rotation, FIFO queues and visitor isolation remain intact. See `docs/request-story.md`. No API restart or security-rule changes. Previous notes below are historical.
 
 - Frontend: build with `npm run build -- --base=/aicap/ --outDir=dist/aicap`.
 - Upload only `aicap/index.html`, hashed `aicap/assets/`, font and font license using the `bluecl-deploy` static release helper. Never upload backend source, dataset, `.env`, credentials or server scripts to the public root.
