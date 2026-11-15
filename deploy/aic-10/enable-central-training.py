@@ -234,10 +234,64 @@ def activity_sources(balancer):
         '            finally:\n                state.activity.end()\n') + balancer[end:]
 
 
+def prediction_error_sources(balancer):
+    anchor = "@app.get('/status')\n"
+    balancer = replace(balancer, anchor, """@lru_cache(maxsize=1)
+def prediction_error(_bucket):
+    uri = 'file:/home/ubuntu/.local/share/qless-training/central-training.sqlite3?mode=ro'
+    try:
+        from contextlib import closing
+        with closing(sqlite3.connect(uri, uri=True, timeout=.1)) as db:
+            fields = 'batch,samples,ROUND(100.0*absolute_error/actual_tokens,3)'
+            rows = db.execute(f'SELECT {fields} FROM prediction_error_batches ORDER BY batch DESC LIMIT 25').fetchall()
+            first = db.execute(f'SELECT {fields} FROM prediction_error_batches ORDER BY batch LIMIT 1').fetchone()
+        if not rows:
+            return {'total': 0, 'first': None, 'batches': [], 'pending': 0}
+        batch, count, _ = rows[0]
+        return {'total': (batch-1)*100+count,
+                'first': first[2] if first[1]==100 else None,
+                'batches': [{'end': n*100, 'rate': rate} for n, size, rate in reversed(rows) if size==100],
+                'pending': count if count<100 else 0}
+    except sqlite3.Error:
+        return None
+
+
+""" + anchor)
+    return replace(balancer, "                'gpu_activity': state.activity.report(),\n",
+        "                'gpu_activity': state.activity.report(),\n"
+        "                'prediction_error': prediction_error(int(time.monotonic() // 3)),\n")
+
+
+def candidate_metrics_sources(balancer):
+    anchor = "@app.get('/status')\n"
+    balancer = replace(balancer, anchor, """@lru_cache(maxsize=1)
+def prediction_candidate(_bucket):
+    uri = 'file:/home/ubuntu/.local/share/qless-training/central-training.sqlite3?mode=ro'
+    try:
+        from contextlib import closing
+        with closing(sqlite3.connect(uri, uri=True, timeout=.1)) as db:
+            row = db.execute('''SELECT COUNT(*), SUM(actual), SUM(ABS(baseline-actual)),
+                SUM(ABS(candidate-actual)) FROM length_evaluation WHERE finish_reason='stop' AND actual>0
+                AND model_version=(SELECT MAX(model_version) FROM length_evaluation)''').fetchone()
+            if not row[0]:
+                return None
+            count, actual, previous, candidate = row
+            return {'samples':count,'baseline_wape':round(100*previous/actual,2),
+                    'candidate_wape':round(100*candidate/actual,2)}
+    except sqlite3.Error:
+        return None
+
+
+""" + anchor)
+    return replace(balancer, "                'prediction_error': prediction_error(int(time.monotonic() // 3)),\n",
+        "                'prediction_error': prediction_error(int(time.monotonic() // 3)),\n"
+        "                'prediction_candidate': prediction_candidate(int(time.monotonic() // 3)),\n")
+
+
 def main():
     initial = helpers.router_status()
-    if 'gpu_activity' in initial:
-        print('Workload and GPU activity already enabled')
+    if 'prediction_candidate' in initial:
+        print('Prediction comparison monitoring already enabled')
         return
     if any(initial['inflight'].values()) or initial['queue']['waiting']:
         raise RuntimeError('Wait for active router requests before deployment')
@@ -253,7 +307,11 @@ def main():
         sources = sources[0], report_sources(sources[1])
     if not initial.get('workload_experiments'):
         sources = workload_sources(*sources)
-    updated = sources[0], activity_sources(sources[1])
+    if 'gpu_activity' not in initial:
+        sources = sources[0], activity_sources(sources[1])
+    if 'prediction_error' not in initial:
+        sources = sources[0], prediction_error_sources(sources[1])
+    updated = sources[0], candidate_metrics_sources(sources[1])
     for path, source in zip(paths, updated):
         compile(source, str(path), 'exec')
     backup = ROOT / 'backups' / datetime.now(timezone.utc).strftime('central-probe-%Y%m%dT%H%M%SZ')
@@ -270,7 +328,7 @@ def main():
         for _ in range(30):
             try:
                 status = helpers.router_status()
-                if 'gpu_activity' in status and status['policy'] == initial['policy']:
+                if 'prediction_candidate' in status and status['policy'] == initial['policy']:
                     print(f'Central probes enabled; previous source: {backup}')
                     return
             except (OSError, ValueError):

@@ -8,7 +8,7 @@ import statistics
 import time
 
 import httpx
-from continuous_worker import ROUTER, generate
+from continuous_worker import CHECKPOINT_INTERVAL, ROUTER, generate
 
 ROOT = Path.home() / '.local/share/qless-training'
 POLICIES = ('production_eval', 'shadow_eval', 'shortest_eval', 'work_eval')
@@ -156,10 +156,16 @@ async def main(checkpoint=None):
         (ROOT / f"shadow-comparison-{int(report['started_at'])}.json").write_text(json.dumps(report),encoding='utf-8')
         report.pop('samples',None)
         if report['status']=='completed':
-            history.append({k:report[k] for k in ('started_at','checkpoint','training_samples','results','savings')})
-            report['trend'] = history[-20:]
+            point = {k:report[k] for k in ('started_at','checkpoint','training_samples','results','savings')}
+            point['results'] = [
+                {k:row.get(k) for k in ('scenario','policy','token_wape','fixed_wape','ttft_p95')}
+                for row in report['results'] if row['scenario'] == 'mixed']
+            if checkpoint is not None:
+                history = [row for row in history if row.get('checkpoint') != checkpoint]
+            history.append(point)
+            report['trend'] = history
             staging = history_path.with_suffix('.next')
-            staging.write_text(json.dumps(history[-20:]))
+            staging.write_text(json.dumps(history))
             staging.replace(history_path)
         write(report)
         print(json.dumps(report),flush=True)
@@ -167,5 +173,8 @@ async def main(checkpoint=None):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--checkpoint', type=int, choices=(1000,5000,10000))
-    asyncio.run(main(parser.parse_args().checkpoint))
+    parser.add_argument('--checkpoint', type=int)
+    args = parser.parse_args()
+    if args.checkpoint is not None and (args.checkpoint <= 0 or args.checkpoint % CHECKPOINT_INTERVAL):
+        parser.error('--checkpoint must be a positive multiple of 1000')
+    asyncio.run(main(args.checkpoint))

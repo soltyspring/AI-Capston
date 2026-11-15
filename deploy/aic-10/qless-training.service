@@ -1,0 +1,23 @@
+[Unit]
+Description=QLess central background training through the load balancer
+After=network-online.target round-balancer.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/.local/share/qless-training
+ExecStart=/home/ubuntu/round-vllm-test/bin/python -u /home/ubuntu/.local/share/qless-training/continuous_worker.py --workspace /home/ubuntu/.local/share/qless-training
+Restart=on-failure
+RestartSec=15
+Nice=12
+CPUWeight=10
+IOWeight=10
+OOMScoreAdjust=300
+MemoryMax=640M
+TasksMax=16
+UMask=0077
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
