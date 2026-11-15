@@ -124,6 +124,8 @@ ROUTER_POLL_SECONDS = 3
 MONITOR_ANALYSIS_CACHE_SECONDS = 30
 monitor_analysis_cache = {'expires_at': 0.0, 'value': None}
 monitor_analysis_lock = asyncio.Lock()
+monitor_summary_cache = {'expires_at': 0.0, 'value': None}
+monitor_summary_lock = asyncio.Lock()
 MONITOR_DB = Path(os.environ.get(
     'AICAP_MONITOR_DB', str(Path.home() / '.local/share/aicap/data/monitor.sqlite3')
 ))
@@ -389,7 +391,8 @@ def recent_real_requests(limit):
 
 
 def monitor_summary(hours):
-    since = time.time() - hours * 3600
+    checked_at = time.time()
+    since = checked_at - hours * 3600
     with monitor_db() as db:
         rows = db.execute('''SELECT status, failure_reason, completion_seconds, first_response_seconds
                              FROM real_requests WHERE received_at >= ?''', (since,)).fetchall()
@@ -400,12 +403,12 @@ def monitor_summary(hours):
     completed = [row for row in rows if row['status'] == 'completed']
     failed = [row for row in rows if row['status'] == 'failed']
     latencies = [row['completion_seconds'] for row in completed if row['completion_seconds'] is not None]
-    late = sum(row['completion_seconds'] is not None and row['completion_seconds'] > 30 for row in rows)
+    late = sum(row['completion_seconds'] is not None and row['completion_seconds'] > 30 for row in completed)
     slow_first = sum(row['first_response_seconds'] is not None and row['first_response_seconds'] > 2 for row in rows)
     queue_overflow = sum(row['failure_reason'] == 'queue_overflow' for row in failed)
     queue_timeout = sum(row['failure_reason'] == 'queue_timeout' for row in failed)
     return {
-        'hours': hours, 'sampled_requests': len(rows), 'total_requests': len(rows),
+        'hours': hours, 'checked_at': checked_at, 'sampled_requests': len(rows), 'total_requests': len(rows),
         'completed_requests': len(completed), 'failed_requests': len(failed),
         'average_latency_seconds': round(sum(latencies) / len(latencies), 3) if latencies else None,
         'failure_criteria': {
@@ -724,6 +727,16 @@ def replay_estimate(hours):
     }
 
 
+async def live_analysis_summary():
+    if time.monotonic() < monitor_summary_cache['expires_at']:
+        return monitor_summary_cache['value']
+    async with monitor_summary_lock:
+        if time.monotonic() >= monitor_summary_cache['expires_at']:
+            monitor_summary_cache['value'] = await asyncio.to_thread(monitor_summary, 720)
+            monitor_summary_cache['expires_at'] = time.monotonic() + ROUTER_POLL_SECONDS
+        return monitor_summary_cache['value']
+
+
 async def cached_monitor_analysis(hours, limit):
     now = time.monotonic()
     cached = monitor_analysis_cache['value']
@@ -734,12 +747,11 @@ async def cached_monitor_analysis(hours, limit):
         cached = monitor_analysis_cache['value']
         if cached is not None and now < monitor_analysis_cache['expires_at']:
             return cached
-        summary, replay, benchmarks = await asyncio.gather(
-            asyncio.to_thread(monitor_summary, hours),
+        replay, benchmarks = await asyncio.gather(
             asyncio.to_thread(replay_estimate, hours),
             asyncio.to_thread(benchmark_report, limit),
         )
-        value = {'summary': summary, 'replay': replay, 'benchmarks': benchmarks}
+        value = {'replay': replay, 'benchmarks': benchmarks}
         monitor_analysis_cache['value'] = value
         monitor_analysis_cache['expires_at'] = time.monotonic() + MONITOR_ANALYSIS_CACHE_SECONDS
         return value
@@ -781,7 +793,9 @@ def parse_router_status(data, last_seen):
         }
     return {'servers': servers, 'router_waiting': (data.get('queue') or {}).get('waiting'),
             'shadow_linucb': data.get('shadow_linucb'), 'shadow_comparison': data.get('shadow_comparison'),
-            'recent_experiments': data.get('recent_experiments') or [], 'gpu_activity': data.get('gpu_activity')}
+            'recent_experiments': data.get('recent_experiments') or [], 'gpu_activity': data.get('gpu_activity'),
+            'prediction_error': data.get('prediction_error'), 'prediction_candidate': data.get('prediction_candidate'),
+            'evaluation_cycles': data.get('evaluation_cycles')}
 
 
 async def monitor_router(app):
@@ -869,6 +883,7 @@ async def control(body: Control, request: Request, response: Response):
             asyncio.to_thread(recent_resource_samples, limit),
             asyncio.to_thread(recent_real_requests, 12),
             cached_monitor_analysis(720, 8),
+            live_analysis_summary(),
         )
         response.headers['Cache-Control'] = 'no-store'
         router = request.app.state.router_status
@@ -877,11 +892,12 @@ async def control(body: Control, request: Request, response: Response):
         if comparison and comparison.get('status') == 'running' and comparison.get('recent'):
             recent = comparison['recent']
         return {'summary': result[0], 'resources': result[1], 'requests': result[2],
-                'analysis': result[3], 'sample_interval_seconds': ROUTER_POLL_SECONDS,
+                'analysis': {**result[3], 'summary': result[4]}, 'sample_interval_seconds': ROUTER_POLL_SECONDS,
                 'shadow_linucb': request.app.state.router_status.get('shadow_linucb'),
                 'shadow_comparison': request.app.state.router_status.get('shadow_comparison'),
                 'recent_experiments': recent,
-                'gpu_activity': request.app.state.router_status.get('gpu_activity')}
+                'gpu_activity': router.get('gpu_activity'), 'prediction_error': router.get('prediction_error'),
+                'prediction_candidate': router.get('prediction_candidate'), 'evaluation_cycles': router.get('evaluation_cycles')}
     if body.action == 'real_status':
         response.headers['Cache-Control'] = 'no-store'
         return request.app.state.router_status

@@ -1,0 +1,64 @@
+{
+  "training_samples": 9685,
+  "holdout_samples": 2422,
+  "verified_natural_holdout": 161,
+  "accepted_for_shadow": true,
+  "variants": {
+    "original": {
+      "natural_samples": 161,
+      "natural_wape": 1153.011,
+      "natural_mae": 847.857,
+      "natural_predicted_mean": 920.087,
+      "capped_mae": 23.871,
+      "capped_underprediction": 1.484
+    },
+    "previous_candidate": {
+      "natural_samples": 161,
+      "natural_wape": 741.076,
+      "natural_mae": 544.944,
+      "natural_predicted_mean": 612.727,
+      "capped_mae": 17.244,
+      "capped_underprediction": 1.229
+    },
+    "base": {
+      "natural_samples": 161,
+      "natural_wape": 737.165,
+      "natural_mae": 542.068,
+      "natural_predicted_mean": 609.652,
+      "capped_mae": 17.189,
+      "capped_underprediction": 1.26
+    },
+    "full": {
+      "natural_samples": 161,
+      "natural_wape": 687.178,
+      "natural_mae": 505.311,
+      "natural_predicted_mean": 572.0,
+      "capped_mae": 17.047,
+      "capped_underprediction": 1.648
+    },
+    "without_topic": {
+      "natural_samples": 161,
+      "natural_wape": 675.691,
+      "natural_mae": 496.863,
+      "natural_predicted_mean": 563.255,
+      "capped_mae": 17.027,
+      "capped_underprediction": 1.638
+    },
+    "without_keywords": {
+      "natural_samples": 161,
+      "natural_wape": 696.258,
+      "natural_mae": 511.988,
+      "natural_predicted_mean": 579.584,
+      "capped_mae": 16.842,
+      "capped_underprediction": 1.126
+    },
+    "without_format": {
+      "natural_samples": 161,
+      "natural_wape": 759.6,
+      "natural_mae": 558.565,
+      "natural_predicted_mean": 625.702,
+      "capped_mae": 17.339,
+      "capped_underprediction": 1.402
+    }
+  }
+}

@@ -1,5 +1,6 @@
 import React, {useEffect, useState} from 'react'
 import './routing-analysis.css'
+import lengthComparison from './output-length-comparison.json'
 
 const controlApi = `${import.meta.env.BASE_URL}api/control`
 const policyLabels = {linucb:'LinUCB',round_robin:'Round Robin',shortest_predicted:'예상 완료 시간 최소'}
@@ -26,40 +27,56 @@ const policies = [
 const format = value => value.toLocaleString('ko-KR', {maximumFractionDigits:2})
 const totalRequests = days.reduce((total, [,count])=>total + count, 0)
 
-// Completed requests in completion order, grouped by 100.
-// [sum of absolute token error, sum of actual output tokens]
-const errorBatches = [[50656,64957],[53067,89126],[50410,96467],[44906,72000],[49850,94540],[47863,76847],[49723,90824],[57392,90163],[57597,90551],[57578,90349],[57597,90551],[57578,90349],[57597,90551],[57578,90349]]
-
-function ErrorRateChart() {
-  const points = errorBatches.map(([error,actual],i)=>{
-    const rate = error / actual * 100
-    return {label:`${i*100+1}–${(i+1)*100}`, rate, x:48+i*37, y:139-rate*1.18}
-  })
-  const first = points[0], last = points.at(-1)
-  const summary = points.map(({label,rate})=>`${label}번째 요청: ${rate.toFixed(1)}%`).join('; ')
+function ErrorRateChart({measurement,candidate}) {
+  const batches=measurement?.batches??[]
+  const highest=Math.max(100,...batches.map(row=>row.rate))
+  const ceiling=Math.ceil(highest/4/(highest>=400?100:25))*(highest>=400?100:25)*4
+  const y=rate=>139-118*rate/ceiling
+  const points=batches.map(({rate,end},i)=>({rate,end,x:60+i*466/Math.max(1,batches.length-1),y:y(rate)}))
+  const last=points.at(-1)
   return <section className="routing-analysis-card request-share" aria-labelledby="error-rate-title">
     <div className="request-share-header">
       <div><h3 id="error-rate-title">100건당 예측 오차율</h3>
-        <p>처음 <strong>{first.rate.toFixed(1)}%</strong> → 최근 <strong>{last.rate.toFixed(1)}%</strong></p></div>
-      <span>1,400건</span>
+        {last?<p>처음 <strong>{measurement.first.toFixed(1)}%</strong> → 최근 <strong>{last.rate.toFixed(1)}%</strong></p>:<p>첫 100건의 자연 종료 응답을 모으는 중입니다.</p>}</div>
+      <span>{measurement?format(measurement.total)+'건 수집':'수집 상태 확인 중'}</span>
     </div>
-    <svg className="request-share-chart" viewBox="0 0 560 168" role="img" aria-label="100건마다 출력 길이 예측 오차율 선그래프" aria-describedby="error-rate-values">
-      <desc id="error-rate-values">{summary}</desc>
-      {[0,25,50,75,100].map(value=>{
-        const y=139-value*1.18
-        return <g key={value}>
-          <line x1="42" x2="536" y1={y} y2={y} className="request-share-grid"/>
-          <text x="34" y={y} textAnchor="end" dominantBaseline="middle">{value}%</text>
-        </g>
-      })}
-      <polyline className="request-share-line" points={points.map(({x,y})=>`${x},${y}`).join(' ')}/>
-      {points.map(({label,rate,x,y},i)=><g key={label}>
-        <circle cx={x} cy={y} r="3.5"><title>{label}번째 요청 · {rate.toFixed(1)}%</title></circle>
-        {(i===0||i===points.length-1)&&<text className="request-share-value" x={x} y={y-10} textAnchor={i===0?'start':'end'}>{rate.toFixed(1)}%</text>}
-        {i%2===0&&<text x={x} y="160" textAnchor="middle">{(i+1)*100}</text>}
+    {!!points.length&&<svg className="request-share-chart" viewBox="0 0 560 168" role="img" aria-label="100건마다 출력 길이 예측 오차율 선그래프">
+      {[0,1,2,3,4].map(step=>{const value=step*ceiling/4;return <g key={step}>
+        <line x1="52" x2="536" y1={y(value)} y2={y(value)} className="request-share-grid"/>
+        <text x="46" y={y(value)} textAnchor="end" dominantBaseline="middle">{format(value)}%</text>
+      </g>})}
+      <polyline className="request-share-line" points={points.map(p=>p.x+','+p.y).join(' ')}/>
+      {points.map((p,i)=><g key={p.end}>
+        <circle cx={p.x} cy={p.y} r="3.5"><title>{format(p.end-99)}–{format(p.end)}번째 응답 · {p.rate.toFixed(1)}%</title></circle>
+        {(i===0||i===points.length-1||i%Math.ceil(points.length/5)===0)&&<text x={p.x} y="160" textAnchor="middle">{format(p.end)}</text>}
       </g>)}
-    </svg>
-    <p className="analysis-note">예측기는 재학습하지 않아요. 변화는 질문 구성 차이예요.</p>
+    </svg>}
+    {measurement?.pending>0&&<p className="analysis-note">다음 구간 {measurement.pending}/100건</p>}
+    <p className="analysis-note">상시 실험에서 자연 종료한 답변만 집계합니다. 이 그래프는 낮을수록 좋습니다.</p>
+    {candidate&&<p><strong>개선 예측기 검증 · {format(candidate.samples)}건</strong><br/>
+      같은 응답 기준 오차율: 기존 {format(candidate.baseline_wape)}% → 개선 {format(candidate.candidate_wape)}%</p>}
+    <LengthFeatureComparison report={lengthComparison}/>
+  </section>
+}
+
+function LengthFeatureComparison({report}) {
+  if (!report) return null
+  const scores=report.variants
+  const delta=key=>{
+    const diff=Number((scores[key].natural_mae-scores.full.natural_mae).toFixed(2))
+    if (!diff) return '차이 없음'
+    return `${format(Math.abs(diff))}토큰 ${diff>0?'감소':'증가'}`
+  }
+  return <section aria-labelledby="length-feature-title">
+    <h4 id="length-feature-title">출력 예측 요소 비교</h4>
+    <p className="analysis-note">동일 질문 검증 · 학습 {format(report.training_samples)}건 · 검증 {format(report.holdout_samples)}건 중 자연 종료 {format(report.verified_natural_holdout)}건</p>
+    <DataTable columns={['비교 모델','자연 종료 평균 오차','전체 평균 오차 · 출력 한도 적용']}
+      rows={Object.entries({original:'석진 님 기존 모델',previous_candidate:'이전 개선 모델',base:'기본 특징만 다시 학습',full:'주제·키워드·형식 모두 적용'})
+        .filter(([key])=>scores[key]).map(([key,label])=>[label,`${format(scores[key].natural_mae)}토큰`,`${format(scores[key].capped_mae)}토큰`])}/>
+    <DataTable columns={['비교한 요소','요소 제외 시 평균 오차','요소 추가 효과']}
+      rows={Object.entries({without_topic:'주제',without_keywords:'키워드',without_format:'답변 형식'}).map(([key,label])=>[
+        label,`${format(scores[key].natural_mae)}토큰`,delta(key)])}/>
+    <p className="analysis-note">나머지 특징은 그대로 두고 해당 요소만 빼서 다시 학습했습니다. 효과는 합산할 수 없습니다. 상시 실험 데이터의 오프라인 비교이며, 운영 모델은 그대로입니다.</p>
   </section>
 }
 
@@ -70,20 +87,72 @@ function DataTable({columns, rows}) {
   </table></div>
 }
 
-function ExperimentTrend({label,unit,points}) {
+function CycleChart({title,unit,results,series}) {
+  const palette=['#2164d1','#21845b','#8364ca']
+  const values=results.flatMap(row=>series.map(([,value])=>value(row))).filter(Number.isFinite)
+  const max=Math.max(1,...values)*1.12
+  const y=value=>132-108*value/max
+  const x=i=>64+i*460/Math.max(1,results.length-1)
+  return <section className="routing-analysis-card request-share">
+    <h3>{title}</h3>
+    {!values.length?<p className="analysis-note">첫 평가 구간 완료 후 그래프가 표시됩니다.</p>:<>
+      <p>{series.map(([label],i)=><span key={label} style={{color:palette[i],marginInlineEnd:16}}>{label}</span>)}</p>
+      <svg className="request-share-chart" viewBox="0 0 560 164" role="img" aria-label={title}>
+        {[0,1,2,3,4].map(step=><g key={step}><line className="request-share-grid" x1="58" x2="534" y1={y(max*step/4)} y2={y(max*step/4)}/><text x="52" y={y(max*step/4)} textAnchor="end">{format(max*step/4)}{unit}</text></g>)}
+        {series.map(([label,get],s)=>{const pts=results.map((row,i)=>[x(i),get(row),row.checkpoint]);return <g key={label}>
+          <path fill="none" stroke={palette[s]} strokeWidth="2" d={pts.map(([px,v],i)=>Number.isFinite(v)?`${i&&Number.isFinite(pts[i-1][1])?'L':'M'}${px},${y(v)}`:'').join(' ')}/>
+          {pts.filter(([,v])=>Number.isFinite(v)).map(([px,v,n])=><circle key={n} cx={px} cy={y(v)} r="4" style={{fill:palette[s]}}><title>{format(n)}건 · {label} {format(v)}{unit}</title></circle>)}
+        </g>})}
+        {results.map((row,i)=>(i===0||i===results.length-1||i%Math.ceil(results.length/7)===0)&&<text key={row.checkpoint} x={x(i)} y="155" textAnchor="middle">{format(row.checkpoint)}</text>)}
+      </svg>
+    </>}
+  </section>
+}
+
+function EvaluationCycles({data}) {
+  const [metric,setMetric]=useState('first_p95')
+  const results=data?.results??[]
+  const latest=results.at(-1)
+  const policies=[['Round Robin','round_robin'],['예상 완료 시간 최소','shortest_eval'],['실험 LinUCB','shadow_eval']]
+  return <section aria-labelledby="cycle-evaluation-title">
+    <h3 id="cycle-evaluation-title">1,000건 단위 학습·평가</h3>
+    <p className="analysis-note">{data?(data.phase==='finished'?'실험 요청 재생 완료':`${data.phase==='evaluation'?(data.frozen?'학습 없이 평가 중':'모델 저장 중'):'학습 구간 수집 중'} · ${format(data.done)}/${format(data.window)}건`):'실험 진행 상태 확인 중'}</p>
+    <CycleChart title="출력 토큰 예측 · 평균 절대 오차" unit="토큰" results={results}
+      series={[["기존 예측기",r=>r.prediction.original],["형식·키워드 예측기",r=>r.prediction.candidate]]}/>
+    <p className="analysis-note">자연 종료한 같은 응답으로 비교{latest?` · 최근 ${format(latest.prediction.samples)}건`:''}</p>
+    <label>배정 정책 지표 <select value={metric} onChange={event=>setMetric(event.target.value)}>
+      <option value="first_p95">첫 응답 P95</option><option value="completion_p95">완료 P95</option><option value="failures">실패 건수</option>
+    </select></label>
+    <CycleChart title="서버 배정 정책 · 3개 비교" unit={metric==='failures'?'건':'초'} results={results}
+      series={policies.map(([label,key])=>[label,r=>r.policies[key]?.[metric]])}/>
+    <p className="analysis-note">같은 예측기·질문·동시 요청 수·출력 한도로 실제 GPU에서 비교합니다.</p>
+  </section>
+}
+
+function ExperimentTrend({label,unit,points,current}) {
   const shown=points.filter(point=>Number.isFinite(point.value))
   const values=shown.map(point=>point.value)
   const hi=Math.max(0,...values),lo=Math.min(0,...values)
   const y=value=>76-68*(value-lo)/(hi-lo||1)
-  const x=index=>18+index*284/Math.max(1,shown.length-1)
+  const end=Math.max(points.at(-1)?.count??1000,current??0)
+  const ticks=Array.from({length:end/1000},(_,i)=>(i+1)*1000)
+  const width=Math.max(320,48+Math.max(0,ticks.length-1)*46)
+  const x=count=>24+(count-1000)*(width-48)/Math.max(1000,end-1000)
   const latest=shown.at(-1)
   return <div className="routing-analysis-card"><h4>{label}</h4>{latest?<>
-    <p><strong>{latest.value>0?'+':''}{latest.value.toFixed(2)} {unit}</strong> · {latest.count.toLocaleString()}건 학습 기준</p>
-    <svg role="img" aria-label={label} viewBox="0 0 320 86" style={{width:'100%',maxHeight:130}}>
-      <line x1="12" x2="308" y1={y(0)} y2={y(0)} stroke="#cbd5e1"/>
-      {shown.length>1&&<polyline points={shown.map((p,i)=>`${x(i)},${y(p.value)}`).join(' ')} fill="none" stroke="#20835b" strokeWidth="2"/>}
-      {shown.map((p,i)=><circle key={`${p.count}-${i}`} cx={x(i)} cy={y(p.value)} r="4" fill={p.value<0?'#a43343':'#20835b'}><title>{p.count}건: {p.value.toFixed(2)} {unit}</title></circle>)}
+    <p><strong>{latest.value>0?'+':''}{latest.value.toFixed(2)} {unit}</strong> · {format(latest.count)}건 체크포인트{latest.actual!==latest.count&&` (실측 시 ${format(latest.actual)}건)`}</p>
+    <div className="experiment-trend-scroll" tabIndex={0} role="region" aria-label={`${label} · 체크포인트 그래프`}>
+    <svg className="experiment-trend" role="img" aria-label={label} viewBox={`0 0 ${width} 108`} style={{minWidth:width}}>
+      <line x1="24" x2={width-24} y1={y(0)} y2={y(0)} className="experiment-axis"/>
+      {ticks.map(tick=><g key={tick}><line x1={x(tick)} x2={x(tick)} y1="84" y2="89" className="experiment-axis"/>
+        <text x={x(tick)} y="103" textAnchor="middle">{format(tick)}</text></g>)}
+      {shown.slice(1).map((p,i)=>
+        <line key={p.count} x1={x(shown[i].count)} y1={y(shown[i].value)} x2={x(p.count)} y2={y(p.value)}
+          className={`experiment-segment${p.count-shown[i].count>1000?' experiment-segment-gap':''}`}/>)}
+      {shown.map(p=><circle key={p.count} cx={x(p.count)} cy={y(p.value)} r="4" fill={p.value<0?'#a43343':'var(--analysis-blue)'}>
+        <title>{format(p.count)}건 체크포인트 (실측 시 {format(p.actual)}건): {p.value.toFixed(2)} {unit}</title></circle>)}
     </svg>
+    </div>
   </>:<p>비교 실측이 쌓이면 표시합니다.</p>}</div>
 }
 
@@ -147,7 +216,7 @@ export default function RoutingAnalysis() {
           headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'monitor_dashboard',hours:24,limit:60}),signal:controller.signal})
         if(response.ok&&alive){
           const payload=await response.json()
-          setLive({...payload.analysis,shadow:payload.shadow_linucb,comparison:payload.shadow_comparison,gpuActivity:payload.gpu_activity})
+          setLive({...payload.analysis,shadow:payload.shadow_linucb,comparison:payload.shadow_comparison,gpuActivity:payload.gpu_activity,predictionError:payload.prediction_error,predictionCandidate:payload.prediction_candidate,evaluationCycles:payload.evaluation_cycles})
         }
       }catch{}
       finally{if(alive)timer=setTimeout(poll,3000)}
@@ -165,16 +234,16 @@ export default function RoutingAnalysis() {
   const comparison=live.comparison
   const shadowName=policy=>({shadow_eval:'실험 LinUCB',work_eval:'작업량 기반 LinUCB',shortest_eval:'예상 완료 시간 최소'}[policy]??'운영 LinUCB')
   const seconds=value=>Number.isFinite(value)?`${value.toFixed(2)}초`:'—'
-  const trend=(comparison?.trend??[]).map(run=>{
+  const trend=(comparison?.trend??[]).filter(run=>Number.isInteger(run.checkpoint)&&run.checkpoint>0&&run.checkpoint%1000===0).map(run=>{
     const sample=run.results.find(r=>r.scenario==='mixed'&&r.policy===trendPolicy)
     const baseline=run.results.find(r=>r.scenario==='mixed'&&r.policy==='production_eval')
     const saved=run.savings.find(r=>r.policy===trendPolicy)
-    return {count:Object.values(run.training_samples??{}).reduce((a,b)=>a+b,0),
+    return {count:run.checkpoint,actual:Object.values(run.training_samples??{}).reduce((a,b)=>a+b,0),
       token:sample?.token_wape!=null&&sample?.fixed_wape!=null?sample.fixed_wape-sample.token_wape:null,
       p95:sample?.ttft_p95!=null&&baseline?.ttft_p95>0?100*(baseline.ttft_p95-sample.ttft_p95)/baseline.ttft_p95:null,
       time:saved?.matched?saved.total_seconds_saved*100/saved.matched:null,
       slots:saved?.matched?saved.slot_seconds_saved*100/saved.matched:null}
-  })
+  }).sort((a,b)=>a.count-b.count)
   return <div className="routing-analysis" id="analysis">
     <section className="routing-analysis-intro" aria-labelledby="routing-analysis-title">
       <span className="routing-analysis-kicker">QLess · 실측 기록과 재생 추정</span>
@@ -189,6 +258,9 @@ export default function RoutingAnalysis() {
         <div><dt>완료 요청</dt><dd>{monitorSummary?.completed_requests?.toLocaleString('ko-KR')??'—'}<small>건</small></dd></div>
         <div><dt>자원 표본</dt><dd>{monitorSummary?.resource_samples?.toLocaleString('ko-KR')??'—'}<small>개</small></dd></div>
       </dl>
+      <p className="analysis-note">장애·SLA · 최근 30일 · 약 3초마다 갱신
+        {monitorSummary?.checked_at&&` · 마지막 집계 ${new Date(monitorSummary.checked_at*1000).toLocaleTimeString('ko-KR',{timeZone:'Asia/Seoul'})}`}
+      </p>
       <div className="routing-analysis-table"><table><thead><tr><th>장애·SLA 기준</th><th>건수</th></tr></thead><tbody>
         <tr><th>완료 30초 초과</th><td>{monitorSummary?.failure_criteria?.completion_over_30_seconds??'—'}</td></tr>
         <tr><th>대기열 초과 거절</th><td>{monitorSummary?.failure_criteria?.queue_overflow??'—'}</td></tr>
@@ -196,6 +268,7 @@ export default function RoutingAnalysis() {
         <tr><th>GPU 메모리 95% 이상 + 대기 발생</th><td>{monitorSummary?.failure_criteria?.gpu_memory_backlog_episodes??'—'}회</td></tr>
         <tr><th>첫 토큰 2초 초과</th><td>{monitorSummary?.failure_criteria?.first_token_over_2_seconds??'—'}</td></tr>
       </tbody></table></div>
+      <p className="analysis-note">요청 지표는 실제 운영 요청 기준입니다. GPU 메모리와 대기는 전체 서버 상태에서 관측한 횟수입니다.</p>
       <p className="analysis-note">자원은 서버별 CPU·일반 메모리·GPU·GPU 메모리·대기/실행 요청을 3초 간격으로 수집하며 45일 보관합니다.</p>
     </section>
     <section className="routing-analysis-card">
@@ -250,17 +323,18 @@ export default function RoutingAnalysis() {
       <p className="analysis-note">비교 요청은 모델 학습에 반영하지 않습니다.</p>
     </section>
     <section className="routing-analysis-card"><h3>체크포인트별 개선 추이</h3>
-      <p>위로 갈수록 개선입니다. 시간과 슬롯은 실제 출력 길이가 같은 요청 100건 기준으로 환산합니다.</p>
+      <p>학습 1,000건 간격으로 표시합니다. 점은 실측값이고, 점선은 그 사이에 실측이 없는 구간입니다. 높을수록 좋으며, 시간과 슬롯은 실제 출력 길이가 같은 요청 100건 기준입니다.</p>
       <label>비교 정책 <select value={trendPolicy} onChange={event=>setTrendPolicy(event.target.value)}>
         {['work_eval','shortest_eval','shadow_eval'].map(policy=><option key={policy} value={policy}>{shadowName(policy)}</option>)}
       </select></label>
-      <ExperimentTrend label="출력 토큰 오차 감소 · 고정 400토큰 대비" unit="%p" points={trend.map(p=>({...p,value:p.token}))}/>
-      <ExperimentTrend label="첫 응답 P95 개선 · 혼합 부하" unit="%" points={trend.map(p=>({...p,value:p.p95}))}/>
-      <ExperimentTrend label="로드밸런서로 절약한 요청 완료 시간" unit="초" points={trend.map(p=>({...p,value:p.time}))}/>
-      <ExperimentTrend label="절약한 GPU 서버 슬롯 점유 시간" unit="슬롯·초" points={trend.map(p=>({...p,value:p.slots}))}/>
+      <ExperimentTrend label="출력 토큰 오차 감소 · 고정 400토큰 대비" unit="%p" current={comparison?.status==='running'?comparison.checkpoint:undefined} points={trend.map(p=>({...p,value:p.token}))}/>
+      <ExperimentTrend label="첫 응답 P95 개선 · 혼합 부하" unit="%" current={comparison?.status==='running'?comparison.checkpoint:undefined} points={trend.map(p=>({...p,value:p.p95}))}/>
+      <ExperimentTrend label="로드밸런서로 절약한 요청 완료 시간" unit="초" current={comparison?.status==='running'?comparison.checkpoint:undefined} points={trend.map(p=>({...p,value:p.time}))}/>
+      <ExperimentTrend label="절약한 GPU 서버 슬롯 점유 시간" unit="슬롯·초" current={comparison?.status==='running'?comparison.checkpoint:undefined} points={trend.map(p=>({...p,value:p.slots}))}/>
       <p className="analysis-note">출력 오차는 자연 종료만 집계합니다. 슬롯 점유 시간은 GPU 연산 시간이나 비용과 다릅니다.</p>
     </section>
-    <ErrorRateChart/>
+    <ErrorRateChart measurement={live.predictionError} candidate={live.predictionCandidate}/>
+    <EvaluationCycles data={live.evaluationCycles}/>
     <ErrorBreakdown/>
     <section className="routing-analysis-card" aria-label="분석 요약">
       <dl className="routing-analysis-kpis">
