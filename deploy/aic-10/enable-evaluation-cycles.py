@@ -11,6 +11,15 @@ def replace(source, old, new):
 
 
 def patch(dispatcher, router):
+    for previous in (320,1024):
+        router = router.replace(f'training_max_tokens: int = Field(default=128, ge=1, le={previous})',
+                                'training_max_tokens: int = Field(default=128, ge=1, le=2000)')
+    if 'training_max_tokens: int = Field(default=128, ge=1, le=2000)' not in router:
+        raise ValueError('Unsupported experiment token field')
+    if 'training_output_limit=max_output' not in router:
+        router = replace(router, 'raw_predicted_output_tokens=raw_predicted, policy=policy_label)',
+                         'raw_predicted_output_tokens=raw_predicted, policy=policy_label,\n'
+                         '                        **({"training_output_limit": max_output} if request.training_probe else {}))')
     if '    evaluation_checkpoint:' in router:
         return dispatcher, router
     dispatcher = replace(dispatcher, 'shadow=False, work_aware=False):',

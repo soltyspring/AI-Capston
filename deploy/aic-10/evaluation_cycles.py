@@ -123,7 +123,7 @@ class EvaluationCycles:
                 primary = existing
             for key, outcome in existing.items():
                 if not outcome.get('failure'):
-                    observation = (outcome['input_tokens'], outcome['predicted_tokens'])
+                    observation = (outcome['input_tokens'], outcome['predicted_tokens'], outcome.get('effective_output_limit'))
                     if key in forecasts and forecasts[key] != observation:
                         raise RuntimeError('Policy trials used different input or forecast tokens')
                     forecasts[key] = observation

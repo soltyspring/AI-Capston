@@ -74,8 +74,9 @@ def train(workspace, router, before=None):
             (before,before)).fetchall()
         if before is not None:
             rows.reverse()
-    if len(rows)<1000:
-        raise ValueError('At least 1,000 completed samples are needed')
+    minimum = 100 if before is not None else 1000
+    if len(rows)<minimum:
+        raise ValueError(f'At least {minimum} completed samples are needed')
     wanted = {row[0] for row in rows}
     prompts = {}
     with (workspace/'workload/requests.jsonl').open(encoding='utf-8') as stream:
@@ -104,8 +105,8 @@ def train(workspace, router, before=None):
     base = np.array([features(p,row[1],b) for p,row,b in zip(words,rows,baseline)])
     extras = np.array([extra_features(p,vocabulary) for p in words])
     if before is not None:
-        if natural.sum()<30:
-            raise ValueError('Too few uncensored training observations')
+        if not natural.any():
+            raise ValueError('Missing uncensored training observations')
         _, params = fit_model(np.column_stack((base, extras[:,len(TOPICS):])), y,natural,cut)
         return {'version':3,'accepted':True,'created_at':time.time(),'vocabulary':vocabulary,
                 'training_samples':cut,'before':before,**params}, None

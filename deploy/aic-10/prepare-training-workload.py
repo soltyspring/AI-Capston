@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Build a seekable request set from the installed QLess question corpus."""
+import argparse
 import hashlib
 import json
 from collections import Counter
 from pathlib import Path
-import sys
 
 
-def prepare(source, destination):
+def prepare(source, destination, fixed_budget=None):
     destination.mkdir(parents=True, exist_ok=False)
     counts = Counter()
     seen = set()
@@ -26,7 +26,7 @@ def prepare(source, destination):
                 continue
             seen.add(signature)
             # Exercise different decode budgets with a deterministic, reproducible mix.
-            budget = (64, 128, 224, 320)[signature[0] % 4]
+            budget = fixed_budget if fixed_budget is not None else (64, 128, 224, 320)[signature[0] % 4]
             selected = {'prompt': prompt, 'max_tokens': budget}
             data = (json.dumps(selected, ensure_ascii=False, separators=(',', ':')) + '\n').encode('utf-8')
             output.write(data)
@@ -41,4 +41,9 @@ def prepare(source, destination):
 
 
 if __name__ == '__main__':
-    print(json.dumps(prepare(Path(sys.argv[1]), Path(sys.argv[2]))))
+    parser = argparse.ArgumentParser()
+    parser.add_argument('source', type=Path)
+    parser.add_argument('destination', type=Path)
+    parser.add_argument('--max-tokens', type=int, choices=range(1,2001), metavar='1–2000')
+    args = parser.parse_args()
+    print(json.dumps(prepare(args.source, args.destination, args.max_tokens)))

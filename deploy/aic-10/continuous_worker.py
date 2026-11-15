@@ -107,9 +107,9 @@ def initialize(db, manifest):
 
 
 def checkpoint(db, index, offset, row, measured, rejected=False, concurrency=None):
-    budget = row['max_tokens']
     now = time.time()
     observed = measured or {}
+    budget = observed.get('effective_output_limit') or row['max_tokens']
     sid = observed.get('server')
     with db:
         if db.execute('SELECT 1 FROM samples WHERE request_index=?', (index,)).fetchone():
@@ -241,7 +241,7 @@ async def generate(client, row, probe_model='shadow_train', evaluation_checkpoin
                         'candidates': route['candidates'], 'queue_seconds': route['queue_seconds'],
                         'raw_prediction':route.get('raw_predicted_output_tokens'),
                         'candidate_prediction': candidate_prediction, 'candidate_version': candidate_version,
-                        'finish_reason':payload.get('finish_reason'),
+                        'finish_reason':payload.get('finish_reason'), 'effective_output_limit':route.get('training_output_limit'),
                         'slot_seconds':payload.get('slot_seconds'),
                         'decode_seconds':(payload['last_output_seconds'] - payload['ttft_seconds']
                                           if payload.get('last_output_seconds') is not None
@@ -257,7 +257,8 @@ async def foreground_guard(client):
 
 
 async def run_batch(client, requests, health, save, probe_model='shadow_train', evaluation_checkpoint=None):
-    tasks = [asyncio.create_task(asyncio.wait_for(generate(client, row, probe_model, evaluation_checkpoint), timeout=150))
+    tasks = [asyncio.create_task(asyncio.wait_for(generate(client, row, probe_model, evaluation_checkpoint),
+                                                 timeout=300 if row['max_tokens']>1024 else 150))
              for _, _, row in requests]
     pending = set(tasks)
     positions = dict(zip(tasks, requests))
