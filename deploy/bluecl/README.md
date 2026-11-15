@@ -8,6 +8,16 @@ Recovery 2026-11-03: the API stayed healthy, but the nginx global method map reg
 
 The live dashboard relays requests and status through the existing `/aicap/api/control` path. The API expects the router SSH forward at `127.0.0.1:18823`; the router listens on EC2 loopback port 8008.
 
+On the existing BlueCL host, the private `aicap-admin.service` listens on `127.0.0.1:18947`. From an authorized workstation, keep the following SSH session open:
+
+```powershell
+ssh.exe -NT -i "$env:USERPROFILE/.ssh/ssh-key-2025-09-27.key" -o ExitOnForwardFailure=yes -L 127.0.0.1:18947:127.0.0.1:18947 solty@192.168.0.50
+```
+
+Open `http://127.0.0.1:18947/`, paste the new public IPv4 of `aic-10` and apply it once the router is running. The admin service validates the pinned host key and private router status before replacing the target, then restores the previous configuration if the restarted tunnel fails. The other GPU server addresses do not change here.
+
+For web access, `https://qless.bluecl.cloud/admin` shows a password-only form for the fixed `admin` account. The application verifies the existing SHA-512 login hash from the owner-only `~/.config/aicap/web-login.htpasswd` copy and issues an HTTPS-only session cookie for up to one hour. When changing the login password, update the original `/etc/nginx/qless.htpasswd` and refresh the protected copy with the update script. The change confirmation password is separate and stored only as a salted hash. `/aicap/admin` redirects to the same login. Never proxy the SSH-only loopback UI at `/` to a public site.
+
 For a new installation, create `~/.config/aicap/router-tunnel.env` with `AICAP_ROUTER_TARGET=ubuntu@<router-host>`. Keep the SSH key locally at `~/.ssh/aicap-router-tunnel` and register the verified SSH host key before starting the tunnel. Install `aicap-router-tunnel.service` under `~/.config/systemd/user/`, then run `systemctl --user daemon-reload` and `systemctl --user enable --now aicap-router-tunnel.service`. Check the connection with `curl --fail http://127.0.0.1:18823/status` on the BlueCL host.
 
 The demo allows at most three live requests in flight and defaults to 120 live requests per hour across visitors (`AICAP_REAL_HOURLY_LIMIT`).
