@@ -7,7 +7,7 @@ import RequestStory from './RequestStory.jsx'
 const COLORS = ['#1aaa79', '#478bcb', '#8d71c3']
 const n = value => Number(value).toLocaleString()
 
-export function DashboardShell({ state, children }) {
+export function DashboardShell({ onNavigate, children }) {
   const [menu, setMenu] = useState(false)
   const [active, setActive] = useState(() => window.location.hash || '#overview')
   useEffect(() => {
@@ -18,7 +18,14 @@ export function DashboardShell({ state, children }) {
   return <div className={`app-shell integrated-dashboard ${menu ? 'menu-open' : ''}`}>
     <aside>
       <nav aria-label="대시보드 메뉴"><p>WORKSPACE</p>
-        {[[LayoutDashboard,'대시보드','#overview'],[Activity,'실시간 요청 흐름','#live-flow'],[Server,'GPU 서버 상태','#servers'],[Clock3,'처리 완료 기록','#completions'],[Database,'연구·데이터 설명','#research-guide'],[Database,'고려 요소 현황','#factors'],[GitBranch,'서버 선택 근거','#routing'],[Terminal,'최근 분배 기록','#request-logs']].map(([Icon,label,href]) => <a href={href} key={href} className={active === href ? 'active' : ''} aria-current={active === href ? 'location' : undefined} onClick={() => setMenu(false)}><Icon size={18}/>{label}</a>)}
+        {[[LayoutDashboard,'대시보드','#overview'],[Activity,'실시간 요청 흐름','#live-flow'],[Server,'GPU 서버 상태','#servers'],[Clock3,'처리 완료 기록','#completions'],[Database,'연구·데이터 설명','#research-guide'],[Database,'고려 요소 현황','#factors'],[GitBranch,'서버 선택 근거','#routing'],[Terminal,'최근 분배 기록','#request-logs']].map(([Icon,label,href]) => <a href={href} key={href} className={active === href ? 'active' : ''} aria-current={active === href ? 'location' : undefined} onClick={event => {
+          if(event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+          setMenu(false)
+          onNavigate(href)
+        }}><Icon size={18}/>{label}</a>)}
+      </nav>
+      <nav className="analysis-nav" aria-label="분석 메뉴">
+        <a href="#analysis" className={active === '#analysis' ? 'active' : ''} aria-current={active === '#analysis' ? 'page' : undefined} onClick={() => {setMenu(false); onNavigate('#analysis')}}><Activity size={18}/>상세 분석</a>
       </nav>
     </aside>
     <main className="simulation-app" id="overview"><header>

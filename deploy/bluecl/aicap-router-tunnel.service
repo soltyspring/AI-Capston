@@ -5,7 +5,7 @@ Wants=network-online.target
 
 [Service]
 EnvironmentFile=%h/.config/aicap/router-tunnel.env
-ExecStart=/usr/bin/ssh -NT -i %h/.ssh/aicap-router-tunnel -o BatchMode=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -L 127.0.0.1:18823:127.0.0.1:8008 ${AICAP_ROUTER_TARGET}
+ExecStart=/usr/bin/ssh -NT -i %h/.ssh/aicap-router-tunnel -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o HostKeyAlias=aicap-router -o UserKnownHostsFile=%h/.config/aicap/router-known-hosts -o GlobalKnownHostsFile=/dev/null -o ExitOnForwardFailure=yes -o ConnectTimeout=5 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -L 127.0.0.1:18823:127.0.0.1:8008 ${AICAP_ROUTER_TARGET}
 Restart=always
 RestartSec=5
 
