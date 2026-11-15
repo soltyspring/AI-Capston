@@ -33,7 +33,7 @@ class ApiTests(unittest.TestCase):
 
     def test_visitors_do_not_share_controls_or_state(self):
         now = [1000.0]
-        with patch.object(api, 'time', SimpleNamespace(monotonic=lambda: now[0])):
+        with patch.object(api, 'time', SimpleNamespace(monotonic=lambda: now[0], time=lambda: now[0])):
             with TestClient(app) as alice, TestClient(app) as bob:
                 a0 = alice.get('/api/state')
                 b0 = bob.get('/api/state')
