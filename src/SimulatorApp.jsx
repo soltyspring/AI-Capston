@@ -3,10 +3,16 @@ import { DashboardShell, LiveFlowMap, LiveMetrics, LiveServerCard, DistributionC
 import ConsiderationPanel from './ConsiderationPanel.jsx'
 import ResearchGuide from './ResearchGuide.jsx'
 import ActualDashboard from './ActualDashboard.jsx'
+import RoutingAnalysis from './RoutingAnalysis.jsx'
 
 const number = value => Number(value).toLocaleString()
 // Vite's base is '/' locally and '/aicap/' for the path-based public deployment.
 const API_BASE = `${import.meta.env.BASE_URL}api`
+const actualSections = {
+  'live-flow': 'actual-flow', servers: 'actual-servers',
+  completions: 'actual-completions', factors: 'actual-factors',
+  routing: 'actual-routing', 'request-logs': 'actual-request-logs',
+}
 
 async function sendControl(action, extra = {}) {
   const response = await fetch(`${API_BASE}/control`, {
@@ -34,7 +40,7 @@ function VirtualStatusTable() {
 }
 
 export default function SimulatorApp() {
-  const [page,setPage]=useState(1)
+  const [page,setPage]=useState(() => window.location.hash === '#analysis' ? 3 : 1)
   const pageRef=useRef(page)
   pageRef.current=page
   const [state, setState] = useState(null)
@@ -44,6 +50,31 @@ export default function SimulatorApp() {
   const [samples, setSamples] = useState([])
   const requestVersion = useRef(0)
   const commandInFlight = useRef(false)
+  const [destination, setDestination] = useState(() => ({id:window.location.hash.slice(1)}))
+  useEffect(() => {
+    const navigate = () => setDestination({id:window.location.hash.slice(1) || 'overview'})
+    window.addEventListener('hashchange', navigate)
+    return () => window.removeEventListener('hashchange', navigate)
+  }, [])
+  useEffect(() => {
+    if (!destination?.id) return
+    if (destination.id === 'analysis' && page !== 3) {
+      setPage(3)
+      return
+    }
+    if (page === 3 && destination.id !== 'analysis') {
+      setPage(1)
+      return
+    }
+    if (page === 2 && destination.id === 'research-guide') {
+      setPage(1)
+      return
+    }
+    const target = document.getElementById((page === 2 && actualSections[destination.id]) || destination.id)
+    if (!target?.getClientRects().length) return
+    target.scrollIntoView({block:'start'})
+    setDestination(null)
+  }, [destination, page, Boolean(state)])
   useEffect(() => {
     if (!state) return
     setSamples(previous => {
@@ -103,7 +134,7 @@ export default function SimulatorApp() {
     finally {commandInFlight.current = false; setBusy(false)}
   }
   const latest = state?.decisions.at(-1)
-  return <DashboardShell state={state}>
+  return <DashboardShell onNavigate={href=>setDestination({id:href.slice(1)})}>
     <div className="content" hidden={page!==1}>
       {error && <p role="alert" className="simulation-error">{error}</p>}
       {state && <LiveFlowMap key={`${state.run_id}-${state.policy}-${state.dataset?.name}`} state={state} control={<button className="playback-toggle story-toggle" disabled={busy || !state} onClick={() => command(state.running ? 'pause' : 'start')}>{state.running ? '중지' : '시작'}</button>}/>}
@@ -143,6 +174,13 @@ export default function SimulatorApp() {
       </>}
     </div>
     {page===2 && <div className="content"><ActualDashboard/></div>}
-    <nav className="page-switch" aria-label="화면 선택"><button aria-pressed={page===1} onClick={()=>setPage(1)}>1</button><button aria-pressed={page===2} onClick={()=>setPage(2)}>2</button></nav>
+    {page===3 && <div className="content"><RoutingAnalysis/></div>}
+    <nav className="page-switch" aria-label="화면 선택">{[1,2].map(number => <button key={number} aria-pressed={page===number} onClick={()=>{
+      if (page===3) {
+        window.history.pushState(null,'',window.location.pathname+window.location.search)
+        window.dispatchEvent(new Event('hashchange'))
+      }
+      setPage(number)
+    }}>{number}</button>)}</nav>
   </DashboardShell>
 }

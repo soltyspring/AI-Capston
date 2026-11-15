@@ -177,7 +177,7 @@ PowerShell은 `$env:AICAP_TRACE='data/conversation_trace.jsonl'`, `$env:AICAP_TR
 
 합성 요청으로 테스트하려는 경우에만 `AICAP_TRACE=data/demo.jsonl AICAP_TRAIN=0`을 명시합니다.
 `AICAP_TRAIN=0`은 학습을 끄고 고정 400토큰으로 원본 전체를 재생하는 비교 모드입니다. 기본값은 1입니다.
-실제 요청 기록에는 원문 질문/답변과 GPU 측정값이 없으므로 대시보드에서도 실제 기록과 가상 상태를 구분합니다.
+Mooncake 원본에는 원문 질문/답변과 GPU 측정값이 없습니다. 실제 서비스 요청·GPU 상태는 운영 모니터링 DB에 별도로 기록합니다.
 
 ## 진행 공유 자료 (2026-10-23)
 
@@ -199,5 +199,6 @@ npm run build
 
 최신 진행 내용과 한계: [2026-11-03 진행 정리](docs/progress-2026-11-03.md).
 배포 및 API 차단 복구: [BlueCL 배포 문서](deploy/bluecl/README.md).
+요청·자원 3초 기록, 장애 기준, 주간 LinUCB/Round Robin 비교와 재생 추정: [운영 모니터링 문서](docs/operational-monitoring.md).
 
 커밋 규칙: `[Feat] 기능 추가`, `[Fix] 버그 수정`, `[Design] 화면 변경`, `[Docs] 문서 수정`, `[Test] 테스트 추가`, `[Chore] 설정·자동 검증`.

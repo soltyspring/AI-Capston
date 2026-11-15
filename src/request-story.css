@@ -138,3 +138,18 @@
 .gauge i{transition:width .9s ease,background .4s}.decision-panel td{font-variant-numeric:tabular-nums}
 
 .decision-panel[aria-label='발표용 가상 서버 상태 예시'] thead,.decision-panel[aria-label='발표용 가상 서버 상태 예시'] thead tr,.decision-panel[aria-label='발표용 가상 서버 상태 예시'] thead th{background:#fff!important;background-image:none!important}.decision-panel[aria-label='발표용 가상 서버 상태 예시'] .table-scroll{background:#fff}
+
+.actual-server-status{display:inline-flex;align-items:center;gap:5px}
+.actual-server-status i{width:7px;height:7px;flex:0 0 7px;border-radius:50%;background:#788880}
+.actual-server-status.online i{background:#20835b}
+.actual-server-status.stale i{background:#a66b20}
+
+#actual-servers{scroll-margin-top:138px}
+@media(max-width:760px){#actual-servers{scroll-margin-top:24px}}
+
+.actual-server-progress{margin-top:10px;color:#52685f;font-size:11px}
+.actual-server-progress .story-server-meter{margin:5px 0 6px}
+.actual-server-progress .story-server-meter i{width:0}
+.actual-server-progress .story-server-meter.in-progress i{width:36%;animation:actual-server-progress 1.2s ease-in-out infinite}
+@keyframes actual-server-progress{from{transform:translateX(-100%)}to{transform:translateX(280%)}}
+@media(prefers-reduced-motion:reduce){.actual-server-progress .story-server-meter.in-progress i{animation:none}}

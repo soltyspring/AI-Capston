@@ -1,0 +1,43 @@
+.routing-analysis{--analysis-ink:#191f28;--analysis-muted:#4e5968;--analysis-blue:#1764df;display:grid;gap:20px;max-width:1050px;margin:0 auto;color:var(--analysis-ink);padding-bottom:34px;scroll-margin-top:120px}
+.routing-analysis-intro,.routing-analysis-card{background:white;border:1px solid #e5e8eb;border-radius:20px;padding:clamp(18px,4vw,36px);min-width:0}
+.routing-analysis-kicker{color:var(--analysis-blue);font-weight:750;font-size:14px}
+.routing-analysis h2{margin:9px 0 6px;font-size:clamp(27px,4vw,42px);letter-spacing:-.055em}
+.routing-analysis h3{margin:0 0 10px;font-size:clamp(20px,3vw,26px);letter-spacing:-.035em}
+.routing-analysis p,.routing-analysis-intro>small{color:var(--analysis-muted);line-height:1.65}
+.routing-analysis p{margin:0 0 16px;font-size:15px}
+.routing-analysis-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:24px 0 0}
+.routing-analysis-kpis>div{padding:16px;background:#f2f6fc;border-radius:12px}
+.routing-analysis-kpis dt{font-size:13px;color:var(--analysis-muted)}
+.routing-analysis-kpis dd{margin:6px 0 0;color:var(--analysis-blue);font-weight:780;font-size:clamp(22px,3.5vw,34px);font-variant-numeric:tabular-nums;white-space:nowrap}
+.routing-analysis-kpis dd small{font-size:14px;margin-left:3px}
+.routing-analysis-bars{display:grid;gap:14px;margin:20px 0 24px}
+.routing-analysis-bars>div{display:grid;grid-template-columns:1fr auto;gap:6px 12px;font-size:14px}
+.analysis-track{grid-column:1/-1;height:9px;border-radius:8px;background:#eef2f7;overflow:hidden}
+.analysis-track i{display:block;height:100%;border-radius:8px;background:var(--analysis-blue)}
+.routing-analysis-bars>div+div i{background:#8795a8}
+.routing-analysis-controls{display:flex;gap:8px;margin-bottom:12px}
+.routing-analysis-controls button{min-height:44px;border:0;border-radius:8px;padding:0 15px;background:#f2f4f6;color:var(--analysis-muted);font:inherit;cursor:pointer}
+.routing-analysis-controls button:hover{background:#e6edf7}
+.routing-analysis-controls button[aria-pressed=true]{background:#e8f1ff;color:#125bc8;font-weight:700}
+.routing-analysis-table{overflow-x:auto}
+.routing-analysis-table table{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}
+.routing-analysis-table :is(th,td){padding:11px 8px;text-align:right;border-bottom:1px solid #edf0f3}
+.routing-analysis-table th:first-child{text-align:left;white-space:nowrap}
+.routing-analysis-table thead th{color:var(--analysis-muted);background:#f6f8fa}
+.routing-analysis .analysis-note{margin:12px 0 0;font-size:13px}
+.routing-analysis-learning{display:grid;gap:12px;margin:16px 0}
+.routing-analysis-learning>div{background:#f6f8fa;border-radius:10px;padding:12px}
+.routing-analysis-learning dt{font-weight:700}
+.routing-analysis-learning dd{margin:4px 0 0;color:var(--analysis-muted);line-height:1.6}
+.integrated-dashboard .analysis-nav{margin-top:8px}
+.request-share-header{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap}
+.request-share-header>span{color:var(--analysis-muted);font-size:13px;white-space:nowrap}
+.request-share-chart{display:block;width:100%;height:auto;max-width:840px;margin-inline:auto;overflow:visible}
+.request-share-chart text{fill:var(--analysis-muted);font-size:12px;font-variant-numeric:tabular-nums}
+.request-share-chart .request-share-value{fill:var(--analysis-blue);font-weight:750}
+.request-share-grid{stroke:#e5ebf2;vector-effect:non-scaling-stroke}
+.request-share-line{fill:none;stroke:var(--analysis-blue);stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+.request-share-chart circle{fill:white;stroke:var(--analysis-blue);stroke-width:2;vector-effect:non-scaling-stroke}
+.routing-analysis-card>.routing-analysis-kpis:first-child{margin-top:0}
+@media(max-width:600px){.request-share-chart text{font-size:16px}}
+@media(max-width:600px){.routing-analysis{scroll-margin-top:24px}.routing-analysis-kpis{grid-template-columns:1fr}.routing-analysis-kpis>div{display:flex;align-items:center;justify-content:space-between;gap:8px}.routing-analysis-kpis dd{margin:0}}
