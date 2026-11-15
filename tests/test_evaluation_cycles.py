@@ -27,10 +27,10 @@ class EvaluationTests(unittest.TestCase):
                              [{'prompt':'A','max_tokens':2000},{'prompt':'B','max_tokens':2000}])
 
     def test_boundaries_and_labels_start_at_saved_cursor(self):
-        self.assertEqual(cycle.stage(12345,13344)['phase'],'training')
-        self.assertEqual(cycle.stage(12345,13345),
-            {'phase':'evaluation','done':0,'checkpoint':13345,'end':14345,'label':1000})
-        self.assertEqual(cycle.stage(12345,15345)['label'],2000)
+        self.assertEqual(cycle.stage(12345,12444)['phase'],'training')
+        self.assertEqual(cycle.stage(12345,12445),
+            {'phase':'evaluation','done':0,'checkpoint':12445,'end':12545,'label':100})
+        self.assertEqual(cycle.stage(12345,12545)['label'],200)
 
     def test_v3_excludes_topic_flags_even_when_they_differ(self):
         vocabulary = ['표로']
@@ -43,19 +43,19 @@ class EvaluationTests(unittest.TestCase):
     def test_checkpoint_result_requires_three_complete_policy_trials(self):
         with TemporaryDirectory() as tmp, sqlite3.connect(':memory:') as db:
             db.execute('CREATE TABLE progress (id INTEGER, next_index INTEGER,total INTEGER)')
-            db.execute('INSERT INTO progress VALUES (1,500,2500)')
+            db.execute('INSERT INTO progress VALUES (1,500,700)')
             experiment = cycle.EvaluationCycles(db,Path(tmp))
             response = {'first_seconds':1,'completion_seconds':3,'finish_reason':'stop',
                         'output_tokens':40,'raw_prediction':100,'cycle_prediction':60}
             for policy in cycle.POLICIES:
                 self.assertEqual(db.execute('SELECT COUNT(*) FROM cycle_results').fetchone()[0],0)
                 db.executemany('INSERT INTO cycle_trials VALUES (?,?,?,?)',
-                    ((i, policy,1500,json.dumps(response)) for i in range(1500,2500)))
-                experiment.finish(1500)
-            experiment.publish(2500)
+                    ((i, policy,600,json.dumps(response)) for i in range(600,700)))
+                experiment.finish(600)
+            experiment.publish(700)
             result = json.loads(experiment.report.read_text())['results'][0]
-            self.assertEqual(result['checkpoint'],1000)
-            self.assertEqual(result['prediction'],{'samples':1000,'original':60,'candidate':20})
+            self.assertEqual(result['checkpoint'],100)
+            self.assertEqual(result['prediction'],{'samples':100,'original':60,'candidate':20})
             self.assertTrue(all(row['completion_p95']==3 for row in result['policies'].values()))
 
 

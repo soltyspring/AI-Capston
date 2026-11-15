@@ -74,7 +74,7 @@ def train(workspace, router, before=None):
             (before,before)).fetchall()
         if before is not None:
             rows.reverse()
-    minimum = 100 if before is not None else 1000
+    minimum = 50 if before is not None else 1000
     if len(rows)<minimum:
         raise ValueError(f'At least {minimum} completed samples are needed')
     wanted = {row[0] for row in rows}

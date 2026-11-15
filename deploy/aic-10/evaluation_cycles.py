@@ -9,7 +9,7 @@ import sqlite3
 
 from length_forecast import estimate, load_candidate
 
-WINDOW = 1000
+WINDOW = 100
 POLICIES = ('round_robin','shortest_eval','shadow_eval')
 
 

@@ -115,7 +115,7 @@ function EvaluationCycles({data}) {
   const latest=results.at(-1)
   const policies=[['Round Robin','round_robin'],['예상 완료 시간 최소','shortest_eval'],['실험 LinUCB','shadow_eval']]
   return <section aria-labelledby="cycle-evaluation-title">
-    <h3 id="cycle-evaluation-title">1,000건 단위 학습·평가</h3>
+    <h3 id="cycle-evaluation-title">{format(data?.window??100)}건 단위 학습·평가</h3>
     <p className="analysis-note">{data?(data.phase==='finished'?'실험 요청 재생 완료':`${data.phase==='evaluation'?(data.frozen?'학습 없이 평가 중':'모델 저장 중'):'학습 구간 수집 중'} · ${format(data.done)}/${format(data.window)}건`):'실험 진행 상태 확인 중'}</p>
     <CycleChart title="출력 토큰 예측 · 평균 절대 오차" unit="토큰" results={results}
       series={[["기존 예측기",r=>r.prediction.original],["형식·키워드 예측기",r=>r.prediction.candidate]]}/>
