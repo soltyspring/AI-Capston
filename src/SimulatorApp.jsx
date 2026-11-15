@@ -40,7 +40,7 @@ function VirtualStatusTable() {
 }
 
 export default function SimulatorApp() {
-  const [page,setPage]=useState(() => window.location.hash === '#analysis' ? 3 : 1)
+  const [page,setPage]=useState(() => window.location.hash === '#analysis' ? 3 : 2)
   const pageRef=useRef(page)
   pageRef.current=page
   const [state, setState] = useState(null)
