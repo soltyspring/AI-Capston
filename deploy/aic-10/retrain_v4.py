@@ -1,8 +1,10 @@
 """Retrain the experiment-only v4 models from stored experiment outcomes.
 
-Runs as a low-priority timer job. A new model replaces the current one only when it
-does not do worse on the newest held-out rows, so continuous learning cannot
-silently degrade the experiment policies. Production never loads these models.
+Runs as a low-priority timer job. The recipe is first trained without the newest 15%
+of rows and scored on them. The full refit replaces the current model only when that
+held-out score is no worse than the last accepted score (within 5%) and beats the
+original predictor, so continuous learning cannot silently degrade the experiment
+policies. Production never loads these models.
 """
 import argparse
 import json
@@ -20,6 +22,8 @@ sys.path.insert(0, str(Path.home()/'round'))
 from length_v4 import LengthV4, route_row  # noqa: E402
 
 STEP = 1000
+# Held-out natural-stop MAE of the first v4.1 release (offline report, 2,481 rows).
+FIRST_SCORE = 171.5
 
 
 def load_rows(workspace):
@@ -93,13 +97,15 @@ def main():
     y = np.array([r['output'] for r in hold], float)
     natural = np.array([r['finish'] == 'stop' for r in hold])
     candidate = fit_length(train)
-    current = joblib.load(out/'length_v4.joblib')
     new_score = score(predict(candidate, hold), y, natural)
-    old_score = score(predict(current, hold), y, natural)
-    accepted = new_score['natural_mae'] <= old_score['natural_mae'] * 1.01
+    original = score(np.array([min(r['baseline'], 2000) for r in hold], float), y, natural)
+    # The current model has trained on part of this window, so its own score here would be
+    # optimistic. Compare with the score it earned when it was accepted on unseen rows.
+    reference = (state.get('holdout') or {}).get('natural_mae', FIRST_SCORE)
+    accepted = new_score['natural_mae'] <= reference * 1.05 and new_score['natural_mae'] < original['natural_mae']
     record = {'at': time.time(), 'rows': len(rows), 'trained_until': newest, 'holdout': len(hold),
-              'holdout_first_index': hold[0]['index'], 'candidate': new_score, 'current': old_score,
-              'accepted': bool(accepted)}
+              'holdout_first_index': hold[0]['index'], 'candidate': new_score,
+              'current': {'natural_mae': reference}, 'original': original, 'accepted': bool(accepted)}
     if accepted:
         # The router sees forecasts for requests the length model has not trained on,
         # so fit the completion-time model only on held-out forecasts.

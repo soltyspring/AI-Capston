@@ -210,9 +210,9 @@ function EvaluationCycles({data}) {
       :<p className="analysis-note">v4.1 정책을 포함한 첫 평가 구간이 끝나면 표시합니다.</p>}
     {v4Rows.length>0&&<p className="analysis-note">같은 응답 기준 출력 예측 평균 오차: 기존 {n(mean(v4Rows,r=>r.prediction.original),'토큰')} · 형식·키워드 {n(mean(v4Rows,r=>r.prediction.candidate),'토큰')} · v4.1 {n(mean(v4Rows,r=>r.prediction.v4),'토큰')}</p>}
     <h4>v4.1 자동 재학습</h4>
-    <p className="analysis-note">{model?`실험 데이터 ${format(model.trained_until)}번 요청까지 학습${model.holdout?` · 최신 검증 평균 오차 ${n(model.holdout.natural_mae,'토큰')}`:''}${model.updated_at?` · ${new Date(model.updated_at*1000).toLocaleString('ko-KR',{dateStyle:'short',timeStyle:'short'})} 갱신`:''}`:'재학습 기록을 기다리는 중입니다.'} 새 실험 결과가 1,000건 쌓일 때마다 다시 학습하고, 최신 검증 구간에서 기존 모델보다 나쁘면 교체하지 않습니다.</p>
-    {data?.v4_history?.length>0&&<DataTable columns={['재학습 시각','학습 범위','새 모델 오차','기존 모델 오차','교체']}
-      rows={data.v4_history.slice().reverse().map(h=>[new Date(h.at*1000).toLocaleString('ko-KR',{dateStyle:'short',timeStyle:'short'}),`${format(h.trained_until)}번까지`,n(h.candidate.natural_mae,'토큰'),n(h.current.natural_mae,'토큰'),h.accepted?'교체':'유지'])}/>}
+    <p className="analysis-note">{model?`실험 데이터 ${format(model.trained_until)}번 요청까지 학습${model.holdout?` · 최신 검증 평균 오차 ${n(model.holdout.natural_mae,'토큰')}`:''}${model.updated_at?` · ${new Date(model.updated_at*1000).toLocaleString('ko-KR',{dateStyle:'short',timeStyle:'short'})} 갱신`:''}`:'재학습 기록을 기다리는 중입니다.'} 새 실험 결과가 1,000건 쌓일 때마다 다시 학습합니다. 최신 15%를 빼고 학습한 모델이 그 구간에서 직전 채택 기록보다 5% 넘게 나쁘거나 기존 예측기보다 나쁘면 교체하지 않습니다.</p>
+    {data?.v4_history?.length>0&&<DataTable columns={['재학습 시각','학습 범위','새 모델 검증 오차','직전 채택 기록','기존 예측기','교체']}
+      rows={data.v4_history.filter(h=>h.original).slice().reverse().map(h=>[new Date(h.at*1000).toLocaleString('ko-KR',{dateStyle:'short',timeStyle:'short'}),`${format(h.trained_until)}번까지`,n(h.candidate.natural_mae,'토큰'),n(h.current.natural_mae,'토큰'),n(h.original.natural_mae,'토큰'),h.accepted?'교체':'유지'])}/>}
   </section>
 }
 
