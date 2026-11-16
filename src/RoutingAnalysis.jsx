@@ -135,7 +135,7 @@ function KoreanHoldout({data}) {
   </section>
 }
 
-function V4Trials({data,second}) {
+function V4Trials({data,second,third}) {
   const names={round_robin:'Round Robin',shadow_eval:'실험 LinUCB',v4_eval:'v4 완료 시간 모델',v4_sched:'v4 + 짧은 요청 우선'}
   const n=(v,u='')=>Number.isFinite(v)?`${format(v)}${u}`:'—'
   const offline=data?.offline
@@ -161,10 +161,10 @@ function V4Trials({data,second}) {
       <DataTable columns={['정책','첫 응답 P95','2초 초과율','완료 평균','완료 P95','회차']}
         rows={policies.map(p=>[names[p],n(average(data.stream,p,r=>r.first_p95),'초'),n(average(data.stream,p,r=>r.over_2s_pct),'%'),n(average(data.stream,p,r=>r.completion_mean),'초'),n(average(data.stream,p,r=>r.completion_p95),'초'),data.stream.filter(r=>r.policy===p).length])}/></>}
     {data?.length&&<p className="analysis-note">실제 GPU 응답 {data.length.natural}건 출력 예측 평균 오차: 기존 {n(data.length.original,'토큰')} · v3 {n(data.length.keywords_v3,'토큰')} · v4 {n(data.length.text_v4,'토큰')}</p>}
-    {second?.stream?.length>0&&<><h4>v4.1 · 새 요청 {second.stream_size}건 연속 도착 · {({running:'실측 중',completed:'실측 완료',interrupted:'실측 중단'})[second.status]??''}</h4>
+    {[[second,'v4.1 · 새 요청'],[third,'v4.1 대기열 순서 조정 · 새 요청']].map(([run,label])=>run?.stream?.length>0&&<div key={label}><h4>{label} {run.stream_size}건 연속 도착 · {({running:'실측 중',completed:'실측 완료',interrupted:'실측 중단'})[run.status]??''}</h4>
       <DataTable columns={['정책','첫 응답 P95','2초 초과율','완료 평균','완료 P95','회차']}
-        rows={(second.policies??[]).map(p=>[names[p],n(average(second.stream,p,r=>r.first_p95),'초'),n(average(second.stream,p,r=>r.over_2s_pct),'%'),n(average(second.stream,p,r=>r.completion_mean),'초'),n(average(second.stream,p,r=>r.completion_p95),'초'),second.stream.filter(r=>r.policy===p).length])}/>
-      {second.length&&<p className="analysis-note">실제 GPU 응답 {second.length.natural}건 출력 예측 평균 오차: 기존 {n(second.length.original,'토큰')} · v3 {n(second.length.keywords_v3,'토큰')} · v4.1 {n(second.length.text_v4,'토큰')}</p>}</>}
+        rows={(run.policies??[]).map(p=>[names[p],n(average(run.stream,p,r=>r.first_p95),'초'),n(average(run.stream,p,r=>r.over_2s_pct),'%'),n(average(run.stream,p,r=>r.completion_mean),'초'),n(average(run.stream,p,r=>r.completion_p95),'초'),run.stream.filter(r=>r.policy===p).length])}/>
+      {run.length&&<p className="analysis-note">실제 GPU 응답 {run.length.natural}건 출력 예측 평균 오차: 기존 {n(run.length.original,'토큰')} · v3 {n(run.length.keywords_v3,'토큰')} · v4.1 {n(run.length.text_v4,'토큰')}</p>}</div>)}
     <p className="analysis-note">운영 요청은 기존 예측기와 LinUCB를 그대로 사용합니다. v4는 비교 실험 요청에만 적용합니다.</p>
   </section>
 }
@@ -399,7 +399,7 @@ export default function RoutingAnalysis() {
     <EvaluationCycles data={live.evaluationCycles}/>
     <FixedTrials data={comparison?.fixed_trials}/>
     <QueuedTrials data={comparison?.queued_trials}/>
-    <V4Trials data={comparison?.v4_trials} second={comparison?.v41_trials}/>
+    <V4Trials data={comparison?.v4_trials} second={comparison?.v41_trials} third={comparison?.v42_trials}/>
     <KoreanHoldout data={comparison?.korean_holdout}/>
     {trend.length>0&&<section className="routing-analysis-card"><h3>이전 1,000건 단위 비교</h3>
       <p>학습 1,000건 간격으로 표시합니다. 점은 실측값이고, 점선은 그 사이에 실측이 없는 구간입니다. 높을수록 좋으며, 시간과 슬롯은 실제 출력 길이가 같은 요청 100건 기준입니다.</p>

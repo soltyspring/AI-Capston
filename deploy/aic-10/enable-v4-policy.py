@@ -4,8 +4,8 @@
 Production requests keep the existing predictor and LinUCB. Only benchmark probes
 with probe_model v4_eval or v4_sched use the text length model and the learned
 completion-time model. v4_sched also holds work in the router once each server's
-engine slots are busy, releases the shortest predicted request first, and keeps
-one engine slot per server for requests predicted to be short.
+engine slots are busy and releases the shortest predicted request first; waiting
+time ages long requests forward so they are not starved.
 """
 import argparse
 from pathlib import Path
@@ -27,7 +27,7 @@ def patch_dispatcher(source):
         '        if len(queue) < 2 or not all(m in self.priority for m in queue):\n'
         '            return queue[0]\n'
         '        now = time.monotonic()\n'
-        "        aging = self.state.config.get('v4_aging', 3.0)\n"
+        "        aging = self.state.config.get('v4_aging', 1.0)\n"
         '        return min(queue, key=lambda m: self.priority[m][1] / 70 - aging * (now - self.priority[m][0]))\n\n'
         '    async def reserve(self')
     source = replace(source, "            capacity = 21 if training_probe else",
@@ -40,11 +40,8 @@ def patch_dispatcher(source):
     source = replace(source, "                            can_send = state.active[sid] < server.get('max_inflight', 1)\n",
         "                            can_send = state.active[sid] < server.get('max_inflight', 1)\n"
         "                            if schedule:\n"
-        "                                # Queue in the router, where order can change, instead of inside vLLM,\n"
-        "                                # and leave one engine slot for short work.\n"
-        "                                slots = server.get('engine_slots', 4)\n"
-        "                                long_now = sum(w['predicted_output_tokens'] >= 600 for w in state.active_work[sid].values())\n"
-        "                                can_send = can_send and state.active[sid] < slots and (predicted < 600 or long_now < slots - 1)\n")
+        "                                # Queue in the router, where order can change, instead of inside vLLM.\n"
+        "                                can_send = can_send and state.active[sid] < server.get('engine_slots', 4)\n")
     source = replace(source, "                        policy = policy_override or state.config.get('policy', 'linucb')\n",
         "                        policy = 'v4_route' if route_model is not None else policy_override or state.config.get('policy', 'linucb')\n")
     source = replace(source, "                        elif policy == 'shortest_predicted':\n",
