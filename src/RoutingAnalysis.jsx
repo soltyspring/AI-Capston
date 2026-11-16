@@ -115,8 +115,8 @@ function EvaluationCycles({data}) {
   const latest=results.at(-1)
   const policies=[['Round Robin','round_robin'],['예상 완료 시간 최소','shortest_eval'],['실험 LinUCB','shadow_eval']]
   return <section aria-labelledby="cycle-evaluation-title">
-    <h3 id="cycle-evaluation-title">{format(data?.window??100)}건 단위 학습·평가</h3>
-    <p className="analysis-note">{data?(data.phase==='finished'?'실험 요청 재생 완료':`${data.phase==='evaluation'?(data.frozen?'학습 없이 평가 중':'모델 저장 중'):'학습 구간 수집 중'} · ${format(data.done)}/${format(data.window)}건`):'실험 진행 상태 확인 중'}</p>
+    <h3 id="cycle-evaluation-title">체크포인트별 개선 추이</h3>
+    <p className="analysis-note">{data?(data.phase==='finished'?'실험 요청 재생 완료':`체크포인트 ${format(data.checkpoint)}건 · ${data.phase==='evaluation'?(data.frozen?'학습 없이 평가 중':'모델 저장 중'):'학습 구간 수집 중'} · ${format(data.done)}/${format(data.window??100)}건`):'실험 진행 상태 확인 중'}</p>
     <CycleChart title="출력 토큰 예측 · 평균 절대 오차" unit="토큰" results={results}
       series={[["기존 예측기",r=>r.prediction.original],["형식·키워드 예측기",r=>r.prediction.candidate]]}/>
     <p className="analysis-note">자연 종료한 같은 응답으로 비교{latest?` · 최근 ${format(latest.prediction.samples)}건`:''}</p>
@@ -322,7 +322,8 @@ export default function RoutingAnalysis() {
           row.token_wape==null?'—':`${row.token_wape.toFixed(1)}% · ${row.natural_count}건`])}/>}
       <p className="analysis-note">비교 요청은 모델 학습에 반영하지 않습니다.</p>
     </section>
-    <section className="routing-analysis-card"><h3>체크포인트별 개선 추이</h3>
+    <EvaluationCycles data={live.evaluationCycles}/>
+    {trend.length>0&&<section className="routing-analysis-card"><h3>이전 1,000건 단위 비교</h3>
       <p>학습 1,000건 간격으로 표시합니다. 점은 실측값이고, 점선은 그 사이에 실측이 없는 구간입니다. 높을수록 좋으며, 시간과 슬롯은 실제 출력 길이가 같은 요청 100건 기준입니다.</p>
       <label>비교 정책 <select value={trendPolicy} onChange={event=>setTrendPolicy(event.target.value)}>
         {['work_eval','shortest_eval','shadow_eval'].map(policy=><option key={policy} value={policy}>{shadowName(policy)}</option>)}
@@ -332,9 +333,8 @@ export default function RoutingAnalysis() {
       <ExperimentTrend label="로드밸런서로 절약한 요청 완료 시간" unit="초" current={comparison?.status==='running'?comparison.checkpoint:undefined} points={trend.map(p=>({...p,value:p.time}))}/>
       <ExperimentTrend label="절약한 GPU 서버 슬롯 점유 시간" unit="슬롯·초" current={comparison?.status==='running'?comparison.checkpoint:undefined} points={trend.map(p=>({...p,value:p.slots}))}/>
       <p className="analysis-note">출력 오차는 자연 종료만 집계합니다. 슬롯 점유 시간은 GPU 연산 시간이나 비용과 다릅니다.</p>
-    </section>
+    </section>}
     <ErrorRateChart measurement={live.predictionError} candidate={live.predictionCandidate}/>
-    <EvaluationCycles data={live.evaluationCycles}/>
     <ErrorBreakdown/>
     <section className="routing-analysis-card" aria-label="분석 요약">
       <dl className="routing-analysis-kpis">
