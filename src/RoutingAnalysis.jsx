@@ -125,6 +125,16 @@ function FixedTrials({data}) {
   </section>
 }
 
+function KoreanHoldout({data}) {
+  const cell=n=>Number.isFinite(n)?`${format(n)} 토큰`:'—'
+  return <section className="routing-analysis-card" aria-labelledby="korean-holdout-title">
+    <h3 id="korean-holdout-title">한국어 질문 · 유형별 출력 예측 오차</h3>
+    <p className="analysis-note">{data?`체크포인트 ${format(data.checkpoint)}건 · ${data.done}/${data.total}건 · ${({running:'실측 중',completed:'실측 완료',interrupted:'실측 중단'})[data.status]??'확인 중'}`:'실측 기록을 기다리는 중입니다.'}</p>
+    {data?.results?.length>0&&<DataTable columns={['질문 유형','자연 종료 / 실측','기존 MAE','개선 MAE','형식 보정 MAE','출력 한도 도달']} rows={data.results.map(r=>[r.type,`${r.natural}/${r.total}건`,cell(r.original),cell(r.candidate),cell(r.calibrated),`${r.capped}건`])}/>}
+    <p className="analysis-note">학습에 넣지 않은 질문입니다. 예측 오차는 자연 종료한 같은 답변으로 비교하며, 낮을수록 좋습니다.</p>
+  </section>
+}
+
 function QueuedTrials({data}) {
   const names={round_robin:'Round Robin',shortest_eval:'예상 완료 시간 최소',shadow_eval:'실험 LinUCB'}
   const kind=e=>e?.kind==='engine'?'세 서버의 vLLM 대기열':e?.kind==='router'?'세 서버 슬롯 포화 · 로드밸런서 대기열':'미확인'
@@ -355,6 +365,7 @@ export default function RoutingAnalysis() {
     <EvaluationCycles data={live.evaluationCycles}/>
     <FixedTrials data={comparison?.fixed_trials}/>
     <QueuedTrials data={comparison?.queued_trials}/>
+    <KoreanHoldout data={comparison?.korean_holdout}/>
     {trend.length>0&&<section className="routing-analysis-card"><h3>이전 1,000건 단위 비교</h3>
       <p>학습 1,000건 간격으로 표시합니다. 점은 실측값이고, 점선은 그 사이에 실측이 없는 구간입니다. 높을수록 좋으며, 시간과 슬롯은 실제 출력 길이가 같은 요청 100건 기준입니다.</p>
       <label>비교 정책 <select value={trendPolicy} onChange={event=>setTrendPolicy(event.target.value)}>
