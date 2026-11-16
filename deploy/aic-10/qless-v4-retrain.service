@@ -1,0 +1,16 @@
+[Unit]
+Description=QLess experiment-only v4 model retraining
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/.local/share/qless-training
+Environment=OPENBLAS_NUM_THREADS=2 OMP_NUM_THREADS=2 MKL_NUM_THREADS=2
+ExecStart=/home/ubuntu/qwen3_8b_100k_questions_bundle/.token_predict_venv/bin/python -u /home/ubuntu/.local/share/qless-training/retrain_v4.py
+Nice=15
+CPUWeight=10
+IOWeight=10
+MemoryMax=3G
+TimeoutStartSec=3600
+UMask=0077
+NoNewPrivileges=true

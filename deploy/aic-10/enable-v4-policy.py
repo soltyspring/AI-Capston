@@ -73,9 +73,12 @@ def patch_balancer(source):
         "V4_LOCK = __import__('threading').Lock()\n\n\n"
         "def v4_models():\n"
         "    with V4_LOCK:\n"
-        "        if getattr(app.state, 'v4', None) is None:\n"
+        "        # Reload when the background retraining job replaces the model files.\n"
+        "        stamp = os.path.getmtime(V4_ROOT + '/length_v4.joblib'), os.path.getmtime(V4_ROOT + '/route_v1.joblib')\n"
+        "        if getattr(app.state, 'v4', None) is None or getattr(app.state, 'v4_stamp', None) != stamp:\n"
         "            import length_v4  # noqa: F401  (needed to unpickle the length model)\n"
         "            app.state.v4 = (joblib.load(V4_ROOT + '/length_v4.joblib'), joblib.load(V4_ROOT + '/route_v1.joblib'))\n"
+        "            app.state.v4_stamp = stamp\n"
         "        return app.state.v4\n\n\n"
         "@app.get('/status')\n")
     source = replace(source, "                'training_burst_supported': True,\n",

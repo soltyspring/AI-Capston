@@ -1,0 +1,10 @@
+[Unit]
+Description=Check every 30 minutes whether 1,000 new experiment rows are ready for v4 retraining
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=30min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
