@@ -47,7 +47,7 @@ class EvaluationTests(unittest.TestCase):
             experiment = cycle.EvaluationCycles(db,Path(tmp))
             response = {'first_seconds':1,'completion_seconds':3,'finish_reason':'stop',
                         'output_tokens':40,'raw_prediction':100,'cycle_prediction':60}
-            for policy in cycle.POLICIES:
+            for policy in cycle.BASE:
                 self.assertEqual(db.execute('SELECT COUNT(*) FROM cycle_results').fetchone()[0],0)
                 db.executemany('INSERT INTO cycle_trials VALUES (?,?,?,?)',
                     ((i, policy,600,json.dumps(response)) for i in range(600,700)))
@@ -57,6 +57,30 @@ class EvaluationTests(unittest.TestCase):
             self.assertEqual(result['checkpoint'],100)
             self.assertEqual(result['prediction'],{'samples':100,'original':60,'candidate':20})
             self.assertTrue(all(row['completion_p95']==3 for row in result['policies'].values()))
+            self.assertEqual(set(result['policies']),set(cycle.BASE))
+
+    def test_v4_policies_are_scored_on_the_shared_responses(self):
+        with TemporaryDirectory() as tmp, sqlite3.connect(':memory:') as db:
+            db.execute('CREATE TABLE progress (id INTEGER, next_index INTEGER,total INTEGER)')
+            db.execute('INSERT INTO progress VALUES (1,500,700)')
+            models = Path(tmp)/'models-v4'
+            models.mkdir()
+            (models/'state.json').write_text(json.dumps({'trained_until':18512}))
+            experiment = cycle.EvaluationCycles(db,Path(tmp))
+            shared = {'first_seconds':1,'completion_seconds':3,'finish_reason':'stop',
+                      'output_tokens':40,'raw_prediction':100,'cycle_prediction':60}
+            for policy in cycle.POLICIES:
+                first = 3 if policy=='v4_sched' else 1
+                response = dict(shared,first_seconds=first,predicted_tokens=45 if policy=='v4_eval' else 100)
+                db.executemany('INSERT INTO cycle_trials VALUES (?,?,?,?)',
+                    ((i,policy,600,json.dumps(response)) for i in range(600,700)))
+            experiment.finish(600)
+            result = json.loads(db.execute('SELECT result FROM cycle_results').fetchone()[0])
+            self.assertEqual(result['prediction']['v4'],5)
+            self.assertEqual(result['prediction']['v4_samples'],100)
+            self.assertEqual(result['policies']['v4_sched']['over_2s_pct'],100)
+            self.assertEqual(result['policies']['round_robin']['over_2s_pct'],0)
+            self.assertEqual(result['v4_trained_until'],18512)
 
 
 if __name__ == '__main__':

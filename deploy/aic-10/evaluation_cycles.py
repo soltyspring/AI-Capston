@@ -10,7 +10,9 @@ import sqlite3
 from length_forecast import estimate, load_candidate
 
 WINDOW = 100
-POLICIES = ('round_robin','shortest_eval','shadow_eval')
+BASE = ('round_robin','shortest_eval','shadow_eval')
+# v4 policies use their own length forecast, so only BASE shares one forecast per request.
+POLICIES = BASE + ('v4_eval','v4_sched')
 
 
 def stage(start, index):
@@ -121,7 +123,7 @@ class EvaluationCycles:
                 await asyncio.sleep(.5)
             if policy=='shadow_eval':
                 primary = existing
-            for key, outcome in existing.items():
+            for key, outcome in (existing.items() if policy in BASE else ()):
                 if not outcome.get('failure'):
                     observation = (outcome['input_tokens'], outcome['predicted_tokens'], outcome.get('effective_output_limit'))
                     if key in forecasts and forecasts[key] != observation:
@@ -140,25 +142,50 @@ class EvaluationCycles:
             save(item,outcome)
 
     def finish(self, boundary):
-        slices = {policy:[] for policy in POLICIES}
-        for policy,outcome in self.db.execute('SELECT policy,outcome FROM cycle_trials WHERE boundary=?',(boundary,)):
-            slices[policy].append(json.loads(outcome))
-        if any(len(rows)!=WINDOW for rows in slices.values()):
+        slices = {policy:{} for policy in POLICIES}
+        for index,policy,outcome in self.db.execute(
+                'SELECT request_index,policy,outcome FROM cycle_trials WHERE boundary=?',(boundary,)):
+            if policy in slices:
+                slices[policy][index] = json.loads(outcome)
+        if any(len(slices[policy])!=WINDOW for policy in BASE):
             return
         metrics = {}
         for policy,rows in slices.items():
-            success = [r for r in rows if not r.get('failure')]
-            metrics[policy] = {'first_p95':p95([r['first_seconds'] for r in success if r['first_seconds'] is not None]),
+            # A window that straddles an upgrade can lack the newer policies.
+            if len(rows)!=WINDOW:
+                continue
+            success = [r for r in rows.values() if not r.get('failure')]
+            first = [r['first_seconds'] for r in success if r['first_seconds'] is not None]
+            metrics[policy] = {'first_p95':p95(first),
                                'completion_p95':p95([r['completion_seconds'] for r in success]),
-                               'failures':WINDOW-len(success)}
-        natural = [r for r in slices['shadow_eval'] if r.get('finish_reason')=='stop' and r['output_tokens']>0]
+                               'failures':WINDOW-len(success),
+                               'over_2s_pct':round(100*sum(f>2 for f in first)/len(first),1) if first else None,
+                               'completion_mean':round(sum(r['completion_seconds'] for r in success)/len(success),3)
+                                   if success else None}
+        natural = {i:r for i,r in slices['shadow_eval'].items() if r.get('finish_reason')=='stop' and r['output_tokens']>0}
         prediction = {'samples':len(natural)}
         if natural:
             for name,field in [('original','raw_prediction'),('candidate','cycle_prediction')]:
-                prediction[name] = round(sum(abs(r[field]-r['output_tokens']) for r in natural)/len(natural),3)
+                prediction[name] = round(sum(abs(r[field]-r['output_tokens']) for r in natural.values())/len(natural),3)
+            v4 = slices['v4_eval']
+            # Score the v4 forecast against the same responses as the other two predictors.
+            paired = [(v4[i]['predicted_tokens'],r['output_tokens']) for i,r in natural.items()
+                      if i in v4 and not v4[i].get('failure')]
+            if len(v4)==WINDOW and paired:
+                prediction['v4'] = round(sum(abs(p-a) for p,a in paired)/len(paired),3)
+                prediction['v4_samples'] = len(paired)
         result = {'checkpoint':boundary-self.start,'prediction':prediction,'policies':metrics}
+        version = self.v4_state()
+        if version:
+            result['v4_trained_until'] = version.get('trained_until')
         with self.db:
             self.db.execute('INSERT OR IGNORE INTO cycle_results VALUES (?,?)',(boundary,json.dumps(result)))
+
+    def v4_state(self, name='state.json'):
+        try:
+            return json.loads((self.workspace/'models-v4'/name).read_text())
+        except (OSError, ValueError):
+            return None
 
     def publish(self,index):
         state = self.phase(index)
@@ -170,6 +197,8 @@ class EvaluationCycles:
                                               (state['checkpoint'],)).fetchone())
         state['results'] = [json.loads(r[0]) for r in self.db.execute('SELECT result FROM cycle_results ORDER BY boundary')]
         state['window'] = WINDOW
+        state['v4_model'] = self.v4_state()
+        state['v4_history'] = (self.v4_state('history.json') or [])[-20:]
         if index >= self.db.execute('SELECT total FROM progress').fetchone()[0]:
             state['phase'] = 'finished'
         staged = self.report.with_suffix('.next')

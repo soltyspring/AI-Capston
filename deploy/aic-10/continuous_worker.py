@@ -198,6 +198,9 @@ async def generate(client, row, probe_model='shadow_train', evaluation_checkpoin
         experiment = {'evaluation_checkpoint':evaluation_checkpoint,'benchmark':True}
         if probe_model == 'round_robin':
             experiment['policy_override'] = 'round_robin'
+        elif probe_model in ('v4_eval', 'v4_sched'):
+            # v4 policies use the continuously retrained models, not a frozen checkpoint.
+            experiment = {'benchmark': True}
     async with client.stream('POST', ROUTER + '/chat/stream', json={
         'messages': [{'role': 'user', 'content': row['prompt']}],
         'training_probe': True, 'training_max_tokens': row['max_tokens'],
@@ -230,7 +233,8 @@ async def generate(client, row, probe_model='shadow_train', evaluation_checkpoin
                 first = time.monotonic() - started
             if kind == 'complete' and route:
                 expected = {'production_eval':'linucb','shortest_eval':'shortest_predicted',
-                            'work_eval':'work_linucb','round_robin':'round_robin'}.get(probe_model, 'shadow_linucb')
+                            'work_eval':'work_linucb','round_robin':'round_robin',
+                            'v4_eval':'v4_route','v4_sched':'v4_sched'}.get(probe_model, 'shadow_linucb')
                 if route['policy'] != expected:
                     raise ValueError('probe used the wrong routing model')
                 now = time.monotonic()
