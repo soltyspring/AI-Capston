@@ -125,6 +125,20 @@ function FixedTrials({data}) {
   </section>
 }
 
+function QueuedTrials({data}) {
+  const names={round_robin:'Round Robin',shortest_eval:'예상 완료 시간 최소',shadow_eval:'실험 LinUCB'}
+  const kind=e=>e?.kind==='engine'?'세 서버의 vLLM 대기열':e?.kind==='router'?'세 서버 슬롯 포화 · 로드밸런서 대기열':'미확인'
+  const metric=(n,u)=>Number.isFinite(n)?`${n}${u}`:'—'
+  return <section className="routing-analysis-card" aria-labelledby="queued-trials-title">
+    <h3 id="queued-trials-title">대기열이 쌓인 상태 · 짧은 질문 비교</h3>
+    <p className="analysis-note">{data?`체크포인트 ${format(data.checkpoint)}건 · ${({running:'실측 중',completed:'실측 완료',interrupted:'실측 중단'})[data.status]??'확인 중'}`:'실측 기록을 기다리는 중입니다.'}</p>
+    {data?.ramp?.length>0&&<DataTable columns={['동시 긴 요청','확인된 대기열','서버별 vLLM 최대 대기']} rows={data.ramp.map(r=>[r.load,kind(r.evidence),Object.entries(r.peak).map(([k,v])=>`${k} ${v}건`).join(' · ')])}/>}
+    {data?.results?.length>0&&<DataTable columns={['회차','정책','첫 응답 P95','2초 초과율','첫 응답 표본','로드밸런서 대기 P95']} rows={data.results.map(r=>[r.repeat,names[r.policy],metric(r.ttft_p95,'초'),metric(r.over_2s_pct,'%'),`${r.first_samples}/${r.attempted}건`,metric(r.router_wait_p95,'초')])}/>}
+    {data?.kind==='router'&&<p className="analysis-note">세 서버에 남은 슬롯이 없어 요청이 로드밸런서에서 대기한 조건입니다. 서버 내부 대기열과는 구분합니다.</p>}
+    <p className="analysis-note">개선 후보: 로드밸런서 대기가 지연의 대부분이라면 짧은 요청에 일부 슬롯을 예약하고, 긴 요청의 최대 대기 시간도 함께 확인합니다.</p>
+  </section>
+}
+
 function EvaluationCycles({data}) {
   const [metric,setMetric]=useState('first_p95')
   const results=data?.results??[]
@@ -340,6 +354,7 @@ export default function RoutingAnalysis() {
     </section>
     <EvaluationCycles data={live.evaluationCycles}/>
     <FixedTrials data={comparison?.fixed_trials}/>
+    <QueuedTrials data={comparison?.queued_trials}/>
     {trend.length>0&&<section className="routing-analysis-card"><h3>이전 1,000건 단위 비교</h3>
       <p>학습 1,000건 간격으로 표시합니다. 점은 실측값이고, 점선은 그 사이에 실측이 없는 구간입니다. 높을수록 좋으며, 시간과 슬롯은 실제 출력 길이가 같은 요청 100건 기준입니다.</p>
       <label>비교 정책 <select value={trendPolicy} onChange={event=>setTrendPolicy(event.target.value)}>
