@@ -72,7 +72,8 @@ async def trial(client, row, policy, checkpoint):
                 return {'first_seconds': first, 'completion_seconds': time.monotonic() - started,
                         'queue_seconds': route['queue_seconds'], 'output_tokens': event['actual_output_tokens'],
                         'finish_reason': event.get('finish_reason'), 'raw_prediction': route['predicted_output_tokens'],
-                        'server': route['server_id']}
+                        'server': route['server_id'], 'input_tokens': route['input_tokens'],
+                        'original_prediction': route.get('raw_predicted_output_tokens', route['predicted_output_tokens'])}
     raise RuntimeError('incomplete experiment stream')
 
 
