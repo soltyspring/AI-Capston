@@ -109,6 +109,22 @@ function CycleChart({title,unit,results,series}) {
   </section>
 }
 
+function FixedTrials({data}) {
+  const labels={original:'기존 예측기',candidate:'개선 예측기',round_robin:'Round Robin',shortest_eval:'예상 완료 시간 최소',shadow_eval:'실험 LinUCB'}
+  const value=(n,unit)=>Number.isFinite(n)?`${format(n)}${unit}`:'—'
+  const timing=r=>[r.repeat,labels[r.variant??r.policy],value(r.ttft_p95,'초'),value(r.over_2s_pct,'%'),`${r.first_samples}/${r.attempted}건`]
+  const columns=['회차','비교 대상','첫 응답 P95','2초 초과율','첫 응답 표본']
+  return <section className="routing-analysis-card" aria-labelledby="fixed-trials-title">
+    <h3 id="fixed-trials-title">고정 질문 · 실제 GPU 비교</h3>
+    <p className="analysis-note">{data?`체크포인트 ${format(data.checkpoint)}건 · ${data.repeats}회 · ${({running:'실측 중',completed:'실측 완료',interrupted:'실측 중단'})[data.status]??'상태 확인 중'}`:'아직 실측 기록이 없습니다.'}</p>
+    <h4>기존·개선 예측기 · 예상 완료 시간 최소 정책</h4>
+    {data?.forecast?.length>0?<DataTable columns={[...columns,'동일 출력 평균 오차','동일 출력 표본']} rows={data.forecast.map(r=>[...timing(r),value(r.matched_mae,'토큰'),`${r.matched}건`])}/>:<p className="analysis-note">첫 비교가 완료되면 표시합니다.</p>}
+    <h4>세 서버 혼잡 상태 · 짧은 질문</h4>
+    {data?.congestion?.length>0?<DataTable columns={columns} rows={data.congestion.map(timing)}/>:<p className="analysis-note">첫 혼잡 테스트가 완료되면 표시합니다.</p>}
+    <p className="analysis-note">첫 응답은 첫 답변 토큰 기준입니다. 2초 초과율은 첫 응답을 받은 요청 중 비율입니다.</p>
+  </section>
+}
+
 function EvaluationCycles({data}) {
   const [metric,setMetric]=useState('first_p95')
   const results=data?.results??[]
@@ -323,6 +339,7 @@ export default function RoutingAnalysis() {
       <p className="analysis-note">비교 요청은 모델 학습에 반영하지 않습니다.</p>
     </section>
     <EvaluationCycles data={live.evaluationCycles}/>
+    <FixedTrials data={comparison?.fixed_trials}/>
     {trend.length>0&&<section className="routing-analysis-card"><h3>이전 1,000건 단위 비교</h3>
       <p>학습 1,000건 간격으로 표시합니다. 점은 실측값이고, 점선은 그 사이에 실측이 없는 구간입니다. 높을수록 좋으며, 시간과 슬롯은 실제 출력 길이가 같은 요청 100건 기준입니다.</p>
       <label>비교 정책 <select value={trendPolicy} onChange={event=>setTrendPolicy(event.target.value)}>
