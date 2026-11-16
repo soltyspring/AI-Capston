@@ -187,19 +187,32 @@ function EvaluationCycles({data}) {
   const [metric,setMetric]=useState('first_p95')
   const results=data?.results??[]
   const latest=results.at(-1)
-  const policies=[['Round Robin','round_robin'],['예상 완료 시간 최소','shortest_eval'],['실험 LinUCB','shadow_eval']]
+  const policies=[['Round Robin','round_robin'],['예상 완료 시간 최소','shortest_eval'],['실험 LinUCB','shadow_eval'],['v4.1 배정','v4_eval'],['v4.1 + 짧은 요청 우선','v4_sched']]
+  const v4Rows=results.filter(r=>r.policies?.v4_sched)
+  const mean=(rows,pick)=>{const vals=rows.map(pick).filter(Number.isFinite);return vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:null}
+  const n=(v,u='')=>Number.isFinite(v)?`${format(Math.round(v*10)/10)}${u}`:'—'
+  const model=data?.v4_model
   return <section aria-labelledby="cycle-evaluation-title">
     <h3 id="cycle-evaluation-title">체크포인트별 개선 추이</h3>
     <p className="analysis-note">{data?(data.phase==='finished'?'실험 요청 재생 완료':`체크포인트 ${format(data.checkpoint)}건 · ${data.phase==='evaluation'?(data.frozen?'학습 없이 평가 중':'모델 저장 중'):'학습 구간 수집 중'} · ${format(data.done)}/${format(data.window??100)}건`):'실험 진행 상태 확인 중'}</p>
     <CycleChart title="출력 토큰 예측 · 평균 절대 오차" unit="토큰" results={results}
-      series={[["기존 예측기",r=>r.prediction.original],["형식·키워드 예측기",r=>r.prediction.candidate]]}/>
+      series={[["기존 예측기",r=>r.prediction.original],["형식·키워드 예측기",r=>r.prediction.candidate],["v4.1 문장 학습",r=>r.prediction.v4]]}/>
     <p className="analysis-note">자연 종료한 같은 응답으로 비교{latest?` · 최근 ${format(latest.prediction.samples)}건`:''}</p>
     <label>배정 정책 지표 <select value={metric} onChange={event=>setMetric(event.target.value)}>
-      <option value="first_p95">첫 응답 P95</option><option value="completion_p95">완료 P95</option><option value="failures">실패 건수</option>
+      <option value="first_p95">첫 응답 P95</option><option value="completion_mean">완료 평균</option><option value="over_2s_pct">2초 초과율</option><option value="completion_p95">완료 P95</option><option value="failures">실패 건수</option>
     </select></label>
-    <CycleChart title="서버 배정 정책 · 3개 비교" unit={metric==='failures'?'건':'초'} results={results}
+    <CycleChart title="서버 배정 정책 비교" unit={metric==='failures'?'건':metric==='over_2s_pct'?'%':'초'} results={results}
       series={policies.map(([label,key])=>[label,r=>r.policies[key]?.[metric]])}/>
-    <p className="analysis-note">같은 예측기·질문·동시 요청 수·출력 한도로 실제 GPU에서 비교합니다.</p>
+    <p className="analysis-note">같은 질문·동시 요청 수·출력 한도로 실제 GPU에서 비교합니다. v4.1 두 정책은 자체 예측기를 쓰고, 나머지 세 정책은 같은 예측기를 공유합니다.</p>
+    <h4>v4.1 상시 비교 · 함께 측정한 평가 구간 {v4Rows.length}개 평균</h4>
+    {v4Rows.length>0?<DataTable columns={['정책','첫 응답 P95','2초 초과율','완료 평균','완료 P95']}
+      rows={policies.map(([label,key])=>[label,n(mean(v4Rows,r=>r.policies[key]?.first_p95),'초'),n(mean(v4Rows,r=>r.policies[key]?.over_2s_pct),'%'),n(mean(v4Rows,r=>r.policies[key]?.completion_mean),'초'),n(mean(v4Rows,r=>r.policies[key]?.completion_p95),'초')])}/>
+      :<p className="analysis-note">v4.1 정책을 포함한 첫 평가 구간이 끝나면 표시합니다.</p>}
+    {v4Rows.length>0&&<p className="analysis-note">같은 응답 기준 출력 예측 평균 오차: 기존 {n(mean(v4Rows,r=>r.prediction.original),'토큰')} · 형식·키워드 {n(mean(v4Rows,r=>r.prediction.candidate),'토큰')} · v4.1 {n(mean(v4Rows,r=>r.prediction.v4),'토큰')}</p>}
+    <h4>v4.1 자동 재학습</h4>
+    <p className="analysis-note">{model?`실험 데이터 ${format(model.trained_until)}번 요청까지 학습${model.holdout?` · 최신 검증 평균 오차 ${n(model.holdout.natural_mae,'토큰')}`:''}${model.updated_at?` · ${new Date(model.updated_at*1000).toLocaleString('ko-KR',{dateStyle:'short',timeStyle:'short'})} 갱신`:''}`:'재학습 기록을 기다리는 중입니다.'} 새 실험 결과가 1,000건 쌓일 때마다 다시 학습하고, 최신 검증 구간에서 기존 모델보다 나쁘면 교체하지 않습니다.</p>
+    {data?.v4_history?.length>0&&<DataTable columns={['재학습 시각','학습 범위','새 모델 오차','기존 모델 오차','교체']}
+      rows={data.v4_history.slice().reverse().map(h=>[new Date(h.at*1000).toLocaleString('ko-KR',{dateStyle:'short',timeStyle:'short'}),`${format(h.trained_until)}번까지`,n(h.candidate.natural_mae,'토큰'),n(h.current.natural_mae,'토큰'),h.accepted?'교체':'유지'])}/>}
   </section>
 }
 
