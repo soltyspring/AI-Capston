@@ -13,6 +13,7 @@ from continuous_worker import ROUTER
 from length_forecast import estimate, load_candidate
 
 POLICIES = ('round_robin', 'shadow_eval', 'v4_eval', 'v4_sched')
+NAMES = {'round_robin': 'Round Robin', 'shadow_eval': 'LinUCB', 'v4_eval': 'v4', 'v4_sched': 'v4 sched'}
 
 
 def p95(values):
@@ -61,15 +62,15 @@ def summary(rows, started, ended):
             'wait_p95': p95([r['wait'] for r in rows]), 'makespan': round(ended - started, 1)}
 
 
-async def main(checkpoint, repeats, stream_size):
-    report = {'status': 'running', 'started_at': time.time(), 'checkpoint': checkpoint, 'policies': POLICIES,
-              'burst': [], 'stream': [], 'length': None}
+async def main(checkpoint, repeats, stream_size, policies, key, offset):
+    report = {'status': 'running', 'started_at': time.time(), 'checkpoint': checkpoint, 'policies': policies,
+              'burst': [], 'stream': [], 'length': None, 'corpus_offset': offset, 'stream_size': stream_size}
     offline = Path.home()/'.local/share/qless-training/models-v4/offline-report.json'
     report['offline'] = json.loads(offline.read_text(encoding='utf-8'))
 
     def save():
         data = json.loads(REPORT.read_text()) if REPORT.exists() else {}
-        data['v4_trials'] = report
+        data[key] = report
         tmp = REPORT.with_name('v4-trials.next')
         tmp.write_text(json.dumps(data, ensure_ascii=False, allow_nan=False), encoding='utf-8')
         tmp.replace(REPORT)
@@ -78,9 +79,9 @@ async def main(checkpoint, repeats, stream_size):
     corpus = []
     with (ROOT/'workload/requests.jsonl').open(encoding='utf-8') as stream:
         for i, line in enumerate(stream):
-            if i >= 60000 + stream_size:
+            if i >= offset + stream_size:
                 break
-            if i >= 60000:
+            if i >= offset:
                 corpus.append(json.loads(line)['prompt'])
     gaps = [random.Random(7).expovariate(1.0) for _ in corpus]
     v3 = load_candidate(ROOT/'cycles'/str(checkpoint)/'predictor.json')
@@ -125,12 +126,13 @@ async def main(checkpoint, repeats, stream_size):
 
         try:
             for repeat in range(repeats):
-                order = POLICIES if repeat % 2 == 0 else POLICIES[::-1]
-                for policy in order:
-                    report['current'] = f'burst {repeat + 1} {policy}'
-                    save()
-                    report['burst'].append({'repeat': repeat + 1, 'policy': policy, **await burst(policy)})
-                    save()
+                order = policies if repeat % 2 == 0 else policies[::-1]
+                if 'burst' in modes:
+                    for policy in order:
+                        report['current'] = f'burst {repeat + 1} {policy}'
+                        save()
+                        report['burst'].append({'repeat': repeat + 1, 'policy': policy, **await burst(policy)})
+                        save()
                 for policy in order:
                     report['current'] = f'stream {repeat + 1} {policy}'
                     save()
@@ -161,5 +163,10 @@ if __name__ == '__main__':
     cli.add_argument('--checkpoint', type=int, required=True)
     cli.add_argument('--repeats', type=int, default=2)
     cli.add_argument('--stream-size', type=int, default=60)
+    cli.add_argument('--policies', default=','.join(POLICIES))
+    cli.add_argument('--key', default='v4_trials')
+    cli.add_argument('--offset', type=int, default=60000)
+    cli.add_argument('--skip-burst', action='store_true')
     args = cli.parse_args()
-    asyncio.run(main(args.checkpoint, args.repeats, args.stream_size))
+    modes = () if args.skip_burst else ('burst',)
+    asyncio.run(main(args.checkpoint, args.repeats, args.stream_size, tuple(args.policies.split(',')), args.key, args.offset))

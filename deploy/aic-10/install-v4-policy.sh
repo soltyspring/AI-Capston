@@ -3,10 +3,12 @@
 set -euo pipefail
 umask 077
 router="$HOME/round"
+# Optional: directory holding the unpatched dispatcher.py and vllm_balancer.py.
+source="${1:-$router}"
 stage=$(mktemp -d "$HOME/.local/share/qless-training/v4-stage.XXXXXX")
 backup=$(mktemp -d "$HOME/.local/share/qless-training/v4-backup.XXXXXX")
 cp -p "$router/dispatcher.py" "$router/vllm_balancer.py" "$backup/"
-python3 "$HOME/.local/share/qless-training/enable-v4-policy.py" "$router" "$stage"
+python3 "$HOME/.local/share/qless-training/enable-v4-policy.py" "$source" "$stage"
 restore() {
     code=$?
     if ((code)); then

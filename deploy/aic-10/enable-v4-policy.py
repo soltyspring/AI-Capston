@@ -27,7 +27,8 @@ def patch_dispatcher(source):
         '        if len(queue) < 2 or not all(m in self.priority for m in queue):\n'
         '            return queue[0]\n'
         '        now = time.monotonic()\n'
-        '        return min(queue, key=lambda m: self.priority[m][1] / 70 - (now - self.priority[m][0]))\n\n'
+        "        aging = self.state.config.get('v4_aging', 3.0)\n"
+        '        return min(queue, key=lambda m: self.priority[m][1] / 70 - aging * (now - self.priority[m][0]))\n\n'
         '    async def reserve(self')
     source = replace(source, "            capacity = 21 if training_probe else",
         "            capacity = (64 if benchmark else 21) if training_probe else")
